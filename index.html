@@ -1,0 +1,1197 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⚡ Ultimate Disaster Monitor</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+        :root{
+            --bg-panel:rgba(255,255,255,0.96);--bg-card:#f8f9fb;--bg-input:#fff;--bg-layer:#f5f7fa;--bg-layer-hover:#eef1f6;
+            --accent:#0077cc;--accent-rain:#1976d2;--accent-wind:#2e7d32;--accent-temp:#e65100;
+            --accent-cloud:#546e7a;--accent-humidity:#00838f;--accent-pressure:#607d8b;
+            --accent-hurricane:#c62828;--accent-fire:#ff6f00;--accent-flood:#0288d1;--accent-quake:#e53935;--accent-landslide:#5d4037;
+            --accent-health:#4caf50;
+            --text-primary:#1a2332;--text-secondary:#5a6a7e;
+            --border:rgba(0,0,0,0.1);--border-light:rgba(0,0,0,0.06);
+            --radius:14px;--shadow:0 4px 24px rgba(0,0,0,0.1),0 1px 4px rgba(0,0,0,0.06);
+            --tab-active-bg:#fff;--tabs-bg:#f0f2f5;
+        }
+        [data-theme="dark"]{
+            --bg-panel:rgba(20,25,35,0.95);--bg-card:rgba(255,255,255,0.04);--bg-input:rgba(255,255,255,0.06);
+            --bg-layer:rgba(255,255,255,0.04);--bg-layer-hover:rgba(255,255,255,0.08);
+            --text-primary:#e8ecf1;--text-secondary:#8a9bb5;
+            --border:rgba(255,255,255,0.1);--border-light:rgba(255,255,255,0.06);
+            --shadow:0 4px 24px rgba(0,0,0,0.4),0 1px 4px rgba(0,0,0,0.2);
+            --tab-active-bg:rgba(255,255,255,0.1);--tabs-bg:rgba(255,255,255,0.05);
+        }
+        body,html{height:100%;font-family:'DM Sans',sans-serif;background:#f0f2f5;color:var(--text-primary);overflow:hidden;transition:background 0.3s}
+        [data-theme="dark"] body{background:#0a0e17}
+        #map{height:100vh;width:100%;position:absolute;top:0;left:0}
+        .fullscreen-btn{position:absolute;top:16px;right:16px;z-index:1000;width:40px;height:40px;border-radius:10px;border:1px solid var(--border-light);background:var(--bg-panel);backdrop-filter:blur(16px);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:var(--shadow);transition:all 0.2s}
+        .fullscreen-btn:hover{transform:scale(1.08);background:var(--bg-layer-hover)}
+        .sound-toggle{width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:var(--bg-layer);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;transition:all 0.2s;position:relative}
+        .sound-toggle:hover{background:var(--bg-layer-hover);transform:scale(1.05)}
+        .sound-toggle.muted::after{content:'';position:absolute;width:20px;height:2px;background:#c62828;transform:rotate(-45deg);border-radius:2px}
+        #ui-panel{position:absolute;top:16px;left:16px;z-index:1000;background:var(--bg-panel);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-radius:var(--radius);border:1px solid var(--border-light);box-shadow:var(--shadow);width:350px;max-height:calc(100vh - 32px);overflow:hidden;display:flex;flex-direction:column;transition:background 0.3s,border-color 0.3s,box-shadow 0.3s}
+        .panel-scroll{overflow-y:auto;flex:1;padding:0 16px 16px}
+        .panel-scroll::-webkit-scrollbar{width:4px}
+        .panel-scroll::-webkit-scrollbar-thumb{background:rgba(128,128,128,0.3);border-radius:4px}
+        .panel-top{padding:16px 16px 0}
+        .panel-header{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+        .panel-header .logo{width:34px;height:34px;background:linear-gradient(135deg,#0077cc,#00b4d8);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:17px;box-shadow:0 2px 8px rgba(0,119,204,0.25);transition:background 0.4s;flex-shrink:0}
+        .panel-header .logo.disaster-mode{background:linear-gradient(135deg,#c62828,#ff5722);box-shadow:0 2px 8px rgba(198,40,40,0.25)}
+        .panel-header .logo.traffic-mode{background:linear-gradient(135deg,#8e24aa,#ab47bc)}
+        .panel-header .logo.health-mode{background:linear-gradient(135deg,#43a047,#66bb6a)}
+        .panel-header h2{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700}
+        .header-right{margin-left:auto;display:flex;align-items:center;gap:6px}
+        .status-dot{width:6px;height:6px;background:#4caf50;border-radius:50%;animation:pulse-dot 2s ease-in-out infinite}
+        @keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:0.3}}
+        .status-text{font-size:9px;color:#2e7d32;font-family:'JetBrains Mono',monospace}
+        [data-theme="dark"] .status-text{color:#66bb6a}
+        .theme-toggle{width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:var(--bg-layer);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;transition:all 0.2s}
+        .theme-toggle:hover{background:var(--bg-layer-hover);transform:scale(1.05)}
+        .search-row{display:flex;gap:6px;margin-bottom:12px}
+        .search-container{display:flex;flex:1;border-radius:8px;overflow:hidden;border:1px solid var(--border);background:var(--bg-input);transition:all 0.3s}
+        .search-container:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgba(0,119,204,0.1)}
+        #searchInput{flex:1;padding:9px 12px;background:transparent;border:none;color:var(--text-primary);font-family:'DM Sans',sans-serif;font-size:13px;outline:none}
+        #searchInput::placeholder{color:var(--text-secondary);opacity:0.7}
+        #searchBtn{padding:9px 12px;background:transparent;color:var(--text-secondary);border:none;cursor:pointer;font-size:13px}
+        .geo-btn{width:38px;height:38px;border-radius:8px;border:1px solid var(--border);background:var(--bg-input);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;transition:all 0.2s;flex-shrink:0}
+        .geo-btn:hover{border-color:var(--accent)}
+        .geo-btn.locating{animation:spin 1s linear infinite}
+        @keyframes spin{to{transform:rotate(360deg)}}
+        .tabs-container{display:flex;gap:3px;margin-bottom:14px;background:var(--tabs-bg);border-radius:10px;padding:3px}
+        .tab-btn{flex:1;padding:9px 2px;border:none;border-radius:8px;background:transparent;color:var(--text-secondary);font-family:'DM Sans',sans-serif;font-size:10px;font-weight:700;cursor:pointer;transition:all 0.3s;display:flex;align-items:center;justify-content:center;gap:3px}
+        .tab-btn:hover{background:rgba(128,128,128,0.1)}
+        .tab-btn.active-weather{background:var(--tab-active-bg);color:var(--accent);box-shadow:0 1px 3px rgba(0,0,0,0.06)}
+        .tab-btn.active-disaster{background:var(--tab-active-bg);color:#c62828}
+        .tab-btn.active-traffic{background:var(--tab-active-bg);color:#8e24aa}
+        .tab-btn.active-health{background:var(--tab-active-bg);color:#43a047}
+        .tab-content{display:none;animation:tabFade 0.3s ease}.tab-content.active{display:block}
+        @keyframes tabFade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+        .section-label{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-secondary);margin-bottom:7px;margin-top:2px}
+        .time-range-bar{display:flex;gap:2px;margin-bottom:12px;background:var(--tabs-bg);border-radius:8px;padding:2px}
+        .time-range-btn{flex:1;padding:7px 4px;border:none;border-radius:6px;background:transparent;color:var(--text-secondary);font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:600;cursor:pointer;transition:all 0.25s;text-align:center}
+        .time-range-btn:hover{background:rgba(198,40,40,0.06)}
+        .time-range-btn.active{background:linear-gradient(135deg,#c62828,#e53935);color:#fff;box-shadow:0 2px 8px rgba(198,40,40,0.3)}
+        .time-range-btn .range-label{display:block;font-size:8px;font-weight:400;opacity:0.7;margin-top:1px}
+        .layers-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:12px}
+        .layers-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-bottom:12px}
+        .layer-btn{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 4px;background:var(--bg-layer);border:1.5px solid transparent;border-radius:10px;color:var(--text-secondary);cursor:pointer;font-family:'DM Sans',sans-serif;font-size:10px;font-weight:600;transition:all 0.25s}
+        .layer-btn:hover{background:var(--bg-layer-hover);transform:translateY(-1px)}
+        .layer-btn .icon{font-size:18px;line-height:1}
+        .layer-btn .layer-desc{font-size:8px;font-weight:400;opacity:0.6}
+        .layer-btn.active{border-color:var(--active-color,var(--accent));background:var(--active-bg,rgba(0,119,204,0.08));color:var(--text-primary)}
+        .layer-btn[data-layer="rain"]{--active-color:#1976d2;--active-bg:rgba(25,118,210,0.08)}
+        .layer-btn[data-layer="wind"]{--active-color:#2e7d32;--active-bg:rgba(46,125,50,0.08)}
+        .layer-btn[data-layer="temp"]{--active-color:#e65100;--active-bg:rgba(230,81,0,0.08)}
+        .layer-btn[data-layer="clouds"]{--active-color:#546e7a;--active-bg:rgba(84,110,122,0.08)}
+        .layer-btn[data-layer="pressure"]{--active-color:#607d8b;--active-bg:rgba(96,125,139,0.1)}
+        .layer-btn[data-layer="humidity"]{--active-color:#00838f;--active-bg:rgba(0,131,143,0.1)}
+        .layer-btn[data-layer="quakes"]{--active-color:#e53935;--active-bg:rgba(229,57,53,0.08)}
+        .layer-btn[data-layer="fires"]{--active-color:#ff6f00;--active-bg:rgba(255,111,0,0.1)}
+        .layer-btn[data-layer="floods"]{--active-color:#0288d1;--active-bg:rgba(2,136,209,0.1)}
+        .layer-btn[data-layer="hurricanes"]{--active-color:#c62828;--active-bg:rgba(198,40,40,0.08)}
+        .layer-btn[data-layer="volcanoes"]{--active-color:#795548;--active-bg:rgba(121,85,72,0.1)}
+        .layer-btn[data-layer="landslides"]{--active-color:#5d4037;--active-bg:rgba(93,64,55,0.1)}
+        .layer-btn[data-layer="plates"]{--active-color:#ff9800;--active-bg:rgba(255,152,0,0.1)}
+        .layer-btn[data-layer="flights"]{--active-color:#0288d1;--active-bg:rgba(2,136,209,0.1)}
+        .layer-btn[data-layer="iss"]{--active-color:#283593;--active-bg:rgba(40,53,147,0.1)}
+        .layer-btn[data-layer="traffic"]{--active-color:#d32f2f;--active-bg:rgba(211,47,47,0.1)}
+        .layer-btn[data-layer="trains"]{--active-color:#5d4037;--active-bg:rgba(93,64,55,0.1)}
+        .layer-btn[data-layer="aqi"]{--active-color:#8e24aa;--active-bg:rgba(142,36,170,0.1)}
+        .layer-btn[data-layer="ships"]{--active-color:#0d47a1;--active-bg:rgba(13,71,161,0.1)}
+        .layer-btn[data-layer="pollen-overlay"]{--active-color:#689f38;--active-bg:rgba(104,159,56,0.1)}
+        .color-legend{margin-bottom:8px;padding:9px 10px;background:var(--bg-card);border:1px solid var(--border-light);border-radius:10px;display:none;animation:fadeIn 0.3s}
+        .color-legend.visible{display:block}
+        @keyframes fadeIn{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:translateY(0)}}
+        .legend-header{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-secondary);margin-bottom:5px}
+        .color-bar{height:10px;border-radius:5px;margin-bottom:3px}
+        .color-labels{display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:7px;color:var(--text-secondary);font-weight:600}
+        .legend-note{font-size:9px;color:var(--text-secondary);margin-top:4px;line-height:1.4}
+        .legend-row{display:flex;align-items:center;gap:5px;margin-bottom:2px;font-size:9px;color:var(--text-secondary)}
+        .legend-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+        .info-section{border-top:1px solid var(--border-light);padding-top:10px;margin-top:4px}
+        #weather-info{background:var(--bg-card);border:1px solid var(--border-light);border-radius:10px;padding:10px;min-height:40px}
+        #weather-info.loading{opacity:0.5}
+        .weather-location{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--accent);margin-bottom:6px;font-weight:600}
+        .weather-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px}
+        .weather-stat{display:flex;flex-direction:column;gap:1px}
+        .weather-stat .label{font-size:8px;color:var(--text-secondary);font-family:'JetBrains Mono',monospace;text-transform:uppercase}
+        .weather-stat .value{font-size:15px;font-weight:700;font-family:'JetBrains Mono',monospace}
+        .weather-stat .unit{font-size:9px;font-weight:400;color:var(--text-secondary)}
+        .no-data{color:var(--text-secondary);font-size:11px;text-align:center;padding:5px 0}
+        .no-data .hint{font-size:10px;opacity:0.6;margin-top:3px}
+        .health-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+        .risk-card{background:var(--bg-card);padding:8px;border-radius:8px;border:1px solid var(--border-light)}
+        .risk-title{font-size:9px;text-transform:uppercase;color:var(--text-secondary);font-weight:700;margin-bottom:4px}
+        .risk-val{font-size:14px;font-weight:700;font-family:'JetBrains Mono'}
+        .forecast-section{margin-top:10px;border-top:1px solid var(--border-light);padding-top:10px}
+        .forecast-row{display:flex;justify-content:space-between;gap:4px}
+        .forecast-day{flex:1;background:var(--bg-card);border:1px solid var(--border-light);border-radius:8px;padding:6px 4px;text-align:center}
+        .forecast-day .f-date{font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--text-secondary);font-weight:600;margin-bottom:2px}
+        .forecast-day .f-icon{font-size:18px;margin-bottom:2px}
+        .forecast-day .f-temp{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700}
+        .forecast-day .f-rain{font-family:'JetBrains Mono',monospace;font-size:8px;color:#1976d2}
+        .alert-box{margin-top:8px;padding:8px 10px;border-radius:8px;font-size:10px;line-height:1.4;display:none;animation:fadeIn 0.3s}
+        .alert-box.visible{display:block}
+        .alert-box.warning{background:rgba(255,152,0,0.1);border:1px solid rgba(255,152,0,0.3);color:#e65100}
+        .alert-box.danger{background:rgba(244,67,54,0.1);border:1px solid rgba(244,67,54,0.3);color:#c62828}
+        [data-theme="dark"] .alert-box.warning{color:#ffb74d}
+        [data-theme="dark"] .alert-box.danger{color:#ef5350}
+        .alert-title{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:10px;margin-bottom:3px}
+        .disaster-stats{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:12px}
+        .stat-card{background:var(--bg-card);border:1px solid var(--border-light);border-radius:10px;padding:8px;text-align:center}
+        .stat-card .stat-icon{font-size:15px;margin-bottom:1px}
+        .stat-card .stat-number{font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700}
+        .stat-card .stat-label{font-size:8px;color:var(--text-secondary);font-family:'JetBrains Mono',monospace;text-transform:uppercase}
+        .loading-inline{display:inline-flex;align-items:center;gap:5px;font-size:10px;color:var(--text-secondary);padding:4px 0}
+        .loading-spinner{width:12px;height:12px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.6s linear infinite}
+        .leaflet-popup-content-wrapper{background:var(--bg-panel)!important;border:1px solid var(--border-light)!important;border-radius:12px!important;box-shadow:var(--shadow)!important;color:var(--text-primary)!important}
+        .leaflet-popup-tip{background:var(--bg-panel)!important}
+        .popup-content{font-family:'DM Sans',sans-serif;min-width:170px}
+        .popup-content .popup-title{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;color:var(--accent);margin-bottom:6px}
+        .popup-content .popup-row{display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:11px;border-bottom:1px solid var(--border-light)}
+        .popup-content .popup-row:last-child{border-bottom:none}
+        .popup-content .popup-row .popup-label{color:var(--text-secondary)}
+        .popup-content .popup-row .popup-value{font-family:'JetBrains Mono',monospace;font-weight:600}
+        .hurricane-icon{display:flex;align-items:center;justify-content:center;font-size:22px;animation:spin-storm 2s linear infinite}
+        @keyframes spin-storm{to{transform:rotate(-360deg)}}
+        .storm-list{margin-top:6px;display:flex;flex-direction:column;gap:4px}
+        .storm-item{font-size:10px;padding:6px 8px;background:var(--bg-layer);border-radius:8px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;transition:all 0.2s;border:1px solid transparent}
+        .storm-item:hover{background:var(--bg-layer-hover);border-color:#c62828}
+        .storm-item .s-name{font-weight:700;color:var(--text-primary)}
+        .storm-item .s-detail{font-size:9px;color:var(--text-secondary)}
+        .plane-icon{display:flex;align-items:center;justify-content:center;font-size:18px}
+        .iss-icon{font-size:28px;animation:float 3s ease-in-out infinite}
+        .ship-icon{display:flex;align-items:center;justify-content:center;font-size:14px}
+        @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+        .api-status{font-size:9px;padding:5px 8px;border-radius:6px;margin-top:4px;display:none}
+        .api-status.visible{display:block}
+        .api-status.error{background:rgba(244,67,54,0.08);color:#c62828;border:1px solid rgba(244,67,54,0.2)}
+        .api-status.success{background:rgba(76,175,80,0.08);color:#2e7d32;border:1px solid rgba(76,175,80,0.2)}
+        .notif-toast{position:fixed;top:-80px;left:50%;transform:translateX(-50%);z-index:9999;background:var(--bg-panel);border:1px solid var(--border);border-radius:12px;padding:10px 16px;box-shadow:0 8px 32px rgba(0,0,0,0.2);display:flex;align-items:center;gap:10px;font-size:12px;font-weight:600;transition:top 0.4s cubic-bezier(0.34,1.56,0.64,1);max-width:90vw;backdrop-filter:blur(16px)}
+        .notif-toast.show{top:20px}
+        .notif-toast .notif-icon{font-size:20px}
+        .notif-toast .notif-text{color:var(--text-primary)}
+        .notif-toast .notif-sub{font-size:9px;color:var(--text-secondary);font-weight:400}
+        .leaflet-control-zoom a{background:var(--bg-panel)!important;color:var(--text-primary)!important;border-color:var(--border)!important}
+        .layer-btn[data-layer="thunder"]{--active-color:#ffd600;--active-bg:rgba(255,214,0,0.12)}
+        .layer-btn[data-layer="dust"]{--active-color:#bf8040;--active-bg:rgba(191,128,64,0.12)}
+        .layer-btn[data-layer="scooters"]{--active-color:#00c853;--active-bg:rgba(0,200,83,0.1)}
+        .train-dot{font-size:14px;line-height:1}
+        .layer-btn[data-layer="metro"]{--active-color:#1565c0;--active-bg:rgba(21,101,192,0.1)}
+        .layer-btn[data-layer="bus"]{--active-color:#e65100;--active-bg:rgba(230,81,0,0.1)}
+        .transit-links{display:flex;gap:4px;margin-top:5px}.transit-link{flex:1;display:flex;align-items:center;justify-content:center;gap:4px;padding:6px;border-radius:6px;border:1px solid var(--border);background:var(--bg-layer);color:var(--text-primary);font-size:9px;font-weight:600;cursor:pointer;text-decoration:none;transition:all 0.2s}.transit-link:hover{background:var(--bg-layer-hover);transform:translateY(-1px)}.transit-link img{width:14px;height:14px;border-radius:3px}
+        .metro-icon{width:22px;height:22px;border-radius:4px;background:#1565c0;color:#fff;font-size:13px;font-weight:800;font-family:'JetBrains Mono',Arial,sans-serif;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.3);line-height:1}
+        .metro-icon.tram{background:#00acc1;border-radius:50%;font-size:11px}
+        .bus-icon{width:20px;height:20px;border-radius:50%;background:#e65100;color:#fff;font-size:9px;font-weight:800;font-family:'JetBrains Mono',Arial,sans-serif;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.3);line-height:1}
+        .dist-tool-btn{position:absolute;bottom:30px;right:16px;z-index:1000;width:42px;height:42px;border-radius:10px;border:1px solid var(--border-light);background:var(--bg-panel);backdrop-filter:blur(16px);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:var(--shadow);transition:all 0.2s}
+        .dist-tool-btn:hover{transform:scale(1.08);background:var(--bg-layer-hover)}
+        .dist-tool-btn.active{border-color:#e53935;background:rgba(229,57,53,0.1)}
+        .dist-label{background:var(--bg-panel);border:1px solid var(--border);border-radius:8px;padding:4px 8px;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:var(--text-primary);box-shadow:var(--shadow);white-space:nowrap}
+        .wind-indicator{display:inline-block;animation:windSpin var(--wind-dur,2s) linear infinite}
+        @keyframes windSpin{to{transform:rotate(360deg)}}
+        .wind-indicator.calm{animation:none}
+        .gust-bar{margin-top:4px;padding:4px 6px;border-radius:6px;background:rgba(244,67,54,0.1);border:1px solid rgba(244,67,54,0.2);font-size:9px;color:#c62828;font-family:'JetBrains Mono',monospace}
+        [data-theme="dark"] .gust-bar{color:#ef5350}
+        .swim-badge{display:inline-flex;width:24px;height:24px;border-radius:50%;align-items:center;justify-content:center;font-size:13px;color:#fff;vertical-align:middle;margin-right:2px}
+        .lightning-flash{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(255,255,255,0.85);z-index:9998;pointer-events:none;opacity:0}
+        .lightning-flash.flash{animation:lightningFlash 0.5s ease-out}
+        @keyframes lightningFlash{0%{opacity:0.85}8%{opacity:0.15}16%{opacity:0.7}28%{opacity:0.05}42%{opacity:0.5}100%{opacity:0}}
+        [data-theme="dark"] .lightning-flash{background:rgba(200,200,255,0.4)}
+        .lightning-bolt{font-size:30px;animation:boltFade 1.4s ease-out forwards;filter:drop-shadow(0 0 8px #ffd600) drop-shadow(0 0 16px #ff9800);pointer-events:none}
+        @keyframes boltFade{0%{opacity:1;transform:scale(1.3)}40%{opacity:0.8}100%{opacity:0;transform:scale(0.4)}}
+        @media(max-width:480px){#ui-panel{width:calc(100% - 24px);left:12px;top:10px}.layers-grid-3{grid-template-columns:1fr 1fr}}
+    </style>
+</head>
+<body>
+<div class="lightning-flash" id="lightningFlash"></div>
+<button class="fullscreen-btn" id="fullscreenBtn" onclick="toggleFullscreen()" title="Πλήρης Οθόνη">⛶</button>
+<button class="dist-tool-btn" id="distToolBtn" onclick="toggleDistTool()" title="Μέτρηση απόστασης">📏</button>
+<div class="notif-toast" id="notifToast"><span class="notif-icon" id="notifIcon">⚠️</span><div><div class="notif-text" id="notifText"></div><div class="notif-sub" id="notifSub"></div></div></div>
+<div id="ui-panel">
+    <div class="panel-top">
+        <div class="panel-header">
+            <div class="logo" id="panelLogo">⚡</div>
+            <div><h2>DISASTER MONITOR</h2><div style="display:flex;align-items:center;gap:4px"><div class="status-dot"></div><span class="status-text">LIVE</span></div></div>
+            <div class="header-right">
+                <button class="sound-toggle" id="soundBtn" onclick="toggleSound()" title="Ήχος">🔔</button>
+                <button class="theme-toggle" id="themeBtn" onclick="toggleTheme()" title="Θέμα">🌙</button>
+            </div>
+        </div>
+        <div class="search-row">
+            <div class="search-container"><input type="text" id="searchInput" placeholder="Αναζήτηση πόλης..."><button id="searchBtn">🔍</button></div>
+            <button class="geo-btn" id="geoBtn" onclick="geolocate()" title="Τοποθεσία μου">📍</button>
+        </div>
+        <div class="tabs-container">
+            <button class="tab-btn active-weather" id="tabWeather" onclick="switchTab('weather')"><span>🌤️</span>Καιρός</button>
+            <button class="tab-btn" id="tabDisaster" onclick="switchTab('disaster')"><span>🚨</span>Κίνδυνοι</button>
+            <button class="tab-btn" id="tabTraffic" onclick="switchTab('traffic')"><span>✈️</span>Κίνηση</button>
+            <button class="tab-btn" id="tabHealth" onclick="switchTab('health')"><span>🌿</span>Υγεία</button>
+        </div>
+    </div>
+    <div class="panel-scroll">
+        <!-- WEATHER TAB -->
+        <div class="tab-content active" id="content-weather">
+            <div class="section-label">Επίπεδα Καιρού</div>
+            <div class="layers-grid-3">
+                <button class="layer-btn" data-layer="rain" onclick="toggleW('rain')"><span class="icon">🌧️</span>Βροχή<span class="layer-desc">mm/h</span></button>
+                <button class="layer-btn" data-layer="humidity" onclick="toggleW('humidity')"><span class="icon">💧</span>Υγρασία<span class="layer-desc">%</span></button>
+                <button class="layer-btn" data-layer="wind" onclick="toggleW('wind')"><span class="icon">💨</span>Άνεμος<span class="layer-desc">m/s</span></button>
+                <button class="layer-btn" data-layer="temp" onclick="toggleW('temp')"><span class="icon">🌡️</span>Θερμ.<span class="layer-desc">°C</span></button>
+                <button class="layer-btn" data-layer="clouds" onclick="toggleW('clouds')"><span class="icon">☁️</span>Σύννεφα<span class="layer-desc">%</span></button>
+                <button class="layer-btn" data-layer="pressure" onclick="toggleW('pressure')"><span class="icon">⏱️</span>Πίεση<span class="layer-desc">hPa</span></button>
+                <button class="layer-btn" data-layer="thunder" onclick="toggleThunder()"><span class="icon">⚡</span>Κεραυνοί<span class="layer-desc">Live</span></button>
+                <button class="layer-btn" data-layer="dust" onclick="toggleDust()" style="grid-column:span 2"><span class="icon">🌫️</span>Σκόνη<span class="layer-desc">Saharan Dust</span></button>
+            </div>
+            <div id="legend-rain" class="color-legend"><div class="legend-header">🌧️ Βροχόπτωση</div><div class="color-bar" style="background:linear-gradient(to right,transparent,#c8e6ff 10%,#64b5f6 25%,#1976d2 40%,#ffeb3b 65%,#ff9800 75%,#f44336 85%,#b71c1c)"></div><div class="color-labels"><span>0</span><span>0.5</span><span>5</span><span>10</span><span>20</span><span>50+</span></div></div>
+            <div id="legend-humidity" class="color-legend"><div class="legend-header">💧 Υγρασία %</div></div>
+            <div id="legend-wind" class="color-legend"><div class="legend-header">💨 Άνεμος</div><div class="color-bar" style="background:linear-gradient(to right,#e8f5e9,#4caf50 35%,#ffeb3b 50%,#ff9800 65%,#f44336 80%,#880e4f)"></div><div class="color-labels"><span>0</span><span>10</span><span>15</span><span>25</span><span>40</span><span>60+</span></div></div>
+            <div id="legend-temp" class="color-legend"><div class="legend-header">🌡️ Θερμοκρασία</div><div class="color-bar" style="background:linear-gradient(to right,#4a148c,#1565c0 15%,#80deea 35%,#a5d6a7 45%,#fff59d 55%,#ff9800 75%,#b71c1c)"></div><div class="color-labels"><span>-30°</span><span>-15°</span><span>0°</span><span>15°</span><span>30°</span><span>45°+</span></div></div>
+            <div id="legend-pressure" class="color-legend"><div class="legend-header">⏱️ Πίεση</div><div class="legend-note">Χαμηλή = κακοκαιρία</div></div>
+            <div id="legend-thunder" class="color-legend"><div class="legend-header">⚡ Κεραυνοί — Thunder Mode</div><div class="legend-note">Αστραπές + βροντές στον χάρτη. Ένταση κάθε 4–10 δευτ.</div></div>
+            <div id="legend-dust" class="color-legend"><div class="legend-header">🌫️ Σαχαριανή Σκόνη</div><div class="color-bar" style="background:linear-gradient(to right,#a5d6a7,#fff59d 25%,#ffcc80 50%,#ef9a9a 75%,#b71c1c)"></div><div class="color-labels"><span>0</span><span>25</span><span>50</span><span>100</span><span>200+ μg/m³</span></div><div class="legend-note">Open-Meteo Dust · Κλικ στον χάρτη για τιμή</div></div>
+            <div id="weather-alerts"></div>
+            <div class="info-section">
+                <div class="section-label">📍 Κάνε κλικ στον χάρτη</div>
+                <div id="weather-info"><div class="no-data">Κάνε κλικ σε σημείο<br><span class="hint">για καιρό & πρόβλεψη 5 ημερών</span></div></div>
+            </div>
+            <div class="forecast-section" id="forecast-section" style="display:none">
+                <div class="section-label">📅 Πρόβλεψη 5 ημερών</div>
+                <div class="forecast-row" id="forecast-row"></div>
+            </div>
+        </div>
+        <!-- DISASTER TAB -->
+        <div class="tab-content" id="content-disaster">
+            <div class="section-label">⏱️ Χρονικό Εύρος</div>
+            <div class="time-range-bar">
+                <button class="time-range-btn active" data-range="1" onclick="setTimeRange(1)">24ω<span class="range-label">Ημέρα</span></button>
+                <button class="time-range-btn" data-range="7" onclick="setTimeRange(7)">7μ<span class="range-label">Βδομάδα</span></button>
+                <button class="time-range-btn" data-range="30" onclick="setTimeRange(30)">30μ<span class="range-label">Μήνας</span></button>
+                <button class="time-range-btn" data-range="365" onclick="setTimeRange(365)">365<span class="range-label">Χρόνος</span></button>
+            </div>
+            <div class="section-label">Επίπεδα Καταστροφών</div>
+            <div class="layers-grid">
+                <button class="layer-btn" data-layer="quakes" onclick="toggleQuakes()"><span class="icon">🔴</span>Σεισμοί<span class="layer-desc">USGS</span></button>
+                <button class="layer-btn" data-layer="fires" onclick="toggleFires()"><span class="icon">🔥</span>Πυρκαγιές<span class="layer-desc">EONET+GDACS</span></button>
+                <button class="layer-btn" data-layer="floods" onclick="toggleFloods()"><span class="icon">🌊</span>Πλημμύρες<span class="layer-desc">EONET+GDACS</span></button>
+                <button class="layer-btn" data-layer="hurricanes" onclick="toggleHurricanes()"><span class="icon">🌀</span>Τυφώνες<span class="layer-desc">GDACS</span></button>
+                <button class="layer-btn" data-layer="volcanoes" onclick="toggleVolcanoes()"><span class="icon">🌋</span>Ηφαίστεια<span class="layer-desc">EONET</span></button>
+                <button class="layer-btn" data-layer="landslides" onclick="toggleLandslides()"><span class="icon">🪨</span>Κατολισθήσεις<span class="layer-desc">GDACS+NASA</span></button>
+                <button class="layer-btn" style="grid-column:span 2" data-layer="plates" onclick="togglePlates()"><span class="icon">🗺️</span>Ρήγματα<span class="layer-desc">Τεκτονικές Πλάκες</span></button>
+            </div>
+            <div id="legend-quakes" class="color-legend"><div class="legend-header">🔴 Σεισμοί</div><div class="legend-row"><div class="legend-dot" style="background:#ffeb3b"></div>&lt;2.5</div><div class="legend-row"><div class="legend-dot" style="background:#ff9800"></div>2.5–4.5</div><div class="legend-row"><div class="legend-dot" style="background:#f44336"></div>4.5–6</div><div class="legend-row"><div class="legend-dot" style="background:#b71c1c"></div>&gt;6</div></div>
+            <div id="legend-fires" class="color-legend"><div class="legend-header">🔥 Πυρκαγιές</div><div class="legend-row"><div class="legend-dot" style="background:#ff6f00"></div>EONET</div><div class="legend-row"><div class="legend-dot" style="background:#ff3d00"></div>GDACS</div></div>
+            <div id="legend-floods" class="color-legend"><div class="legend-header">🌊 Πλημμύρες</div><div class="legend-row"><div class="legend-dot" style="background:#0288d1"></div>EONET+GDACS</div></div>
+            <div id="legend-landslides" class="color-legend"><div class="legend-header">🪨 Κατολισθήσεις</div><div class="legend-row"><div class="legend-dot" style="background:#5d4037"></div>GDACS LS</div><div class="legend-row"><div class="legend-dot" style="background:#8d6e63"></div>NASA Landslide</div><div class="legend-note">GDACS + NASA Global Landslide Catalog</div></div>
+            <div id="legend-hurricanes" class="color-legend"><div class="legend-header">🌀 Τυφώνες (GDACS)</div><div id="hurricane-status" class="api-status"></div><div id="active-storms-list" class="storm-list"></div></div>
+            <div class="section-label">Στατιστικά (<span id="statsRangeText">24h</span>)</div>
+            <div class="disaster-stats">
+                <div class="stat-card"><div class="stat-icon">🔴</div><div class="stat-number" id="statQuakes">—</div><div class="stat-label">Σεισμοί</div></div>
+                <div class="stat-card"><div class="stat-icon">🔥</div><div class="stat-number" id="statFires">—</div><div class="stat-label">Πυρκαγιές</div></div>
+                <div class="stat-card"><div class="stat-icon">🌀</div><div class="stat-number" id="statHurricanes">—</div><div class="stat-label">Τυφώνες</div></div>
+                <div class="stat-card"><div class="stat-icon">🌊</div><div class="stat-number" id="statFloods">—</div><div class="stat-label">Πλημμύρες</div></div>
+            </div>
+        </div>
+        <!-- TRAFFIC TAB -->
+        <div class="tab-content" id="content-traffic">
+            <div class="section-label">Κυκλοφορία & Μεταφορές</div>
+            <div class="layers-grid-3">
+                <button class="layer-btn" data-layer="traffic" onclick="toggleTraffic()"><span class="icon">🚗</span>Traffic<span class="layer-desc">TomTom</span></button>
+                <button class="layer-btn" data-layer="trains" onclick="toggleTrains()"><span class="icon">🚆</span>Τρένα<span class="layer-desc">Live</span></button>
+                <button class="layer-btn" data-layer="metro" onclick="toggleMetro()"><span class="icon">🚇</span>Μετρό<span class="layer-desc">Overpass</span></button>
+                <button class="layer-btn" data-layer="bus" onclick="toggleBus()"><span class="icon">🚌</span>Λεωφορεία<span class="layer-desc">Στάσεις</span></button>
+                <button class="layer-btn" data-layer="scooters" onclick="toggleScooters()"><span class="icon">🛴</span>Bikes<span class="layer-desc">CityBikes</span></button>
+                <button class="layer-btn" data-layer="flights" onclick="toggleFlights()"><span class="icon">✈️</span>Πτήσεις<span class="layer-desc">OpenSky</span></button>
+                <button class="layer-btn" data-layer="iss" onclick="toggleISS()"><span class="icon">🛰️</span>ISS</button>
+                <button class="layer-btn" data-layer="ships" onclick="toggleShips()"><span class="icon">🚢</span>Πλοία<span class="layer-desc">AIS</span></button>
+            </div>
+            <div id="legend-traffic" class="color-legend"><div class="legend-header">🚗 Car Traffic (TomTom)</div><div class="color-bar" style="background:linear-gradient(to right,#00cc00,#ffff00 33%,#ff6600 66%,#cc0000)"></div><div class="color-labels"><span>Free Flow</span><span>Slow</span><span>Heavy</span><span>Jam</span></div><div class="legend-note">Get free key: developer.tomtom.com</div></div>
+            <div id="legend-trains" class="color-legend"><div class="legend-header">🚆 Live Trains</div><div class="legend-row"><div class="legend-dot" style="background:#e53935"></div>Live θέσεις (Digitraffic FI)</div><div class="legend-row"><div class="legend-dot" style="background:#795548"></div>Σιδηροδρομικό δίκτυο (OpenRailwayMap)</div></div>
+            <div id="legend-metro" class="color-legend"><div class="legend-header">🚇 Μετρό & Τραμ</div><div class="legend-row"><div class="legend-dot" style="background:#1565c0"></div>Σταθμοί Μετρό</div><div class="legend-row"><div class="legend-dot" style="background:#00acc1"></div>Στάσεις Τραμ</div><div class="legend-note">Overpass API · Zoom ≥11</div></div>
+            <div id="legend-bus" class="color-legend"><div class="legend-header">🚌 Λεωφορεία</div><div class="legend-row"><div class="legend-dot" style="background:#e65100"></div>Στάσεις (Overpass · Zoom ≥13)</div><div class="legend-row"><div class="legend-dot" style="background:#4a148c"></div>Δρομολόγια (öpnvkarte overlay)</div><div class="legend-note">Live δρομολόγια → Moovit / Google Maps:</div><div class="transit-links"><a class="transit-link" id="linkMoovit" href="https://moovitapp.com" target="_blank">🟢 Moovit</a><a class="transit-link" id="linkGmaps" href="https://www.google.com/maps" target="_blank">🗺️ Google Maps</a></div></div>
+            <div id="legend-scooters" class="color-legend"><div class="legend-header">🛴 Bikes & Scooters (CityBikes)</div><div class="legend-row"><div class="legend-dot" style="background:#00c853"></div>Πολλά διαθέσιμα (>5)</div><div class="legend-row"><div class="legend-dot" style="background:#ff9800"></div>Λίγα (1-5)</div><div class="legend-row"><div class="legend-dot" style="background:#f44336"></div>Κανένα</div><div class="legend-note">Zoom ≥11 για σταθμούς</div></div>
+            <div id="legend-flights" class="color-legend"><div class="legend-header">✈️ Πτήσεις (OpenSky)</div></div>
+            <div id="legend-ships" class="color-legend"><div class="legend-header">🚢 Πλοία AIS</div><div class="legend-row"><div class="legend-dot" style="background:#1565c0"></div>Φορτηγό</div><div class="legend-row"><div class="legend-dot" style="background:#2e7d32"></div>Δεξαμενόπλοιο</div><div class="legend-row"><div class="legend-dot" style="background:#f57c00"></div>Επιβατηγό</div></div>
+            <div class="disaster-stats">
+                <div class="stat-card"><div class="stat-icon">🚆</div><div class="stat-number" id="statTrains">—</div><div class="stat-label">Τρένα</div></div>
+                <div class="stat-card"><div class="stat-icon">🚇</div><div class="stat-number" id="statMetro">—</div><div class="stat-label">Μετρό</div></div>
+                <div class="stat-card"><div class="stat-icon">🚌</div><div class="stat-number" id="statBus">—</div><div class="stat-label">Στάσεις</div></div>
+                <div class="stat-card"><div class="stat-icon">🛴</div><div class="stat-number" id="statScooters">—</div><div class="stat-label">Bikes</div></div>
+                <div class="stat-card"><div class="stat-icon">✈️</div><div class="stat-number" id="statFlights">—</div><div class="stat-label">Πτήσεις</div></div>
+                <div class="stat-card"><div class="stat-icon">🚢</div><div class="stat-number" id="statShips">—</div><div class="stat-label">Πλοία</div></div>
+            </div>
+        </div>
+        <!-- HEALTH TAB -->
+        <div class="tab-content" id="content-health">
+            <div class="section-label">🌿 Υγεία</div>
+            <div class="layers-grid">
+                <button class="layer-btn" data-layer="aqi" onclick="toggleW('aqi')"><span class="icon">😷</span>AQI<span class="layer-desc">Αέρας</span></button>
+                <button class="layer-btn" data-layer="pollen-overlay" onclick="togglePollenOverlay()"><span class="icon">🌿</span>Γύρη<span class="layer-desc">Open-Meteo</span></button>
+            </div>
+            <div id="legend-aqi" class="color-legend"><div class="legend-header">😷 AQI</div><div class="color-bar" style="background:linear-gradient(to right,#009966,#ffde33 25%,#ff9933 50%,#cc0033 75%,#660099 90%,#7e0023)"></div><div class="color-labels"><span>Καλός</span><span>Μέτριος</span><span>Κακός</span><span>Επικίνδυνος</span></div></div>
+            <div id="legend-pollen-overlay" class="color-legend"><div class="legend-header">🌿 Γύρη</div><div class="legend-row"><div class="legend-dot" style="background:#4caf50"></div>Low</div><div class="legend-row"><div class="legend-dot" style="background:#fbc02d"></div>Moderate</div><div class="legend-row"><div class="legend-dot" style="background:#ff9800"></div>High</div><div class="legend-row"><div class="legend-dot" style="background:#c62828"></div>Very High</div></div>
+            <div class="info-section">
+                <div class="section-label">📍 Κλικ στον χάρτη</div>
+                <div id="health-info"><div class="no-data">Κλικ σε σημείο για:<br><span class="hint">🏊 Κολύμπι · 🏃 Τρέξιμο · 🌿 Γύρη · 😷 AQI · ☀️ UV · 🦟 Κουνούπια</span></div></div>
+            </div>
+        </div>
+    </div>
+</div>
+<div id="map"></div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const API_KEY='4dd54006579dde27c10fcc0e9b5a106b';
+const WAQI_TOKEN='demo';
+// Ambee key removed — using Open-Meteo (free, no key)
+const AIS_KEY='92103a9460acd6bbce707bc7756e2b257f7b798e';
+const TOMTOM_KEY='8Lg8R8eNs3Ph3pj5QkJxUPwFON75JpCz'; // Free key: https://developer.tomtom.com
+let currentTimeRangeDays=1;
+
+// ═══ SOUND SYSTEM (Web Audio API) ═══
+let soundEnabled=true, audioCtx=null;
+function getAudioCtx(){if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();return audioCtx}
+function playAlertSound(type){
+    if(!soundEnabled)return;
+    try{
+        const ctx=getAudioCtx();const now=ctx.currentTime;
+        const osc=ctx.createOscillator();const gain=ctx.createGain();
+        osc.connect(gain);gain.connect(ctx.destination);
+        if(type==='danger'){osc.frequency.setValueAtTime(880,now);osc.frequency.setValueAtTime(660,now+0.15);osc.frequency.setValueAtTime(880,now+0.3);gain.gain.setValueAtTime(0.3,now);gain.gain.exponentialRampToValueAtTime(0.01,now+0.5);osc.start(now);osc.stop(now+0.5)}
+        else if(type==='warning'){osc.frequency.setValueAtTime(587,now);osc.frequency.linearRampToValueAtTime(784,now+0.2);gain.gain.setValueAtTime(0.2,now);gain.gain.exponentialRampToValueAtTime(0.01,now+0.4);osc.start(now);osc.stop(now+0.4)}
+        else{osc.frequency.setValueAtTime(523,now);gain.gain.setValueAtTime(0.15,now);gain.gain.exponentialRampToValueAtTime(0.01,now+0.3);osc.start(now);osc.stop(now+0.3)}
+    }catch(e){}
+}
+function toggleSound(){soundEnabled=!soundEnabled;const b=document.getElementById('soundBtn');b.textContent=soundEnabled?'🔔':'🔕';b.classList.toggle('muted',!soundEnabled)}
+
+// ═══ NOTIFICATION TOAST ═══
+let notifTimer=null;
+function showNotification(icon,text,sub,type){
+    const t=document.getElementById('notifToast');
+    document.getElementById('notifIcon').textContent=icon;
+    document.getElementById('notifText').textContent=text;
+    document.getElementById('notifSub').textContent=sub||'';
+    t.classList.add('show');
+    playAlertSound(type||'info');
+    clearTimeout(notifTimer);
+    notifTimer=setTimeout(()=>t.classList.remove('show'),4000);
+}
+
+// ═══ FULLSCREEN ═══
+function toggleFullscreen(){
+    if(!document.fullscreenElement){document.documentElement.requestFullscreen().catch(()=>{});document.getElementById('fullscreenBtn').textContent='⛶'}
+    else{document.exitFullscreen();document.getElementById('fullscreenBtn').textContent='⛶'}
+}
+document.addEventListener('fullscreenchange',()=>{document.getElementById('fullscreenBtn').textContent=document.fullscreenElement?'✕':'⛶'});
+
+// ═══ MAP ═══
+const map=L.map('map').setView([38.24,23.73],6);
+let lightTiles=L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{maxZoom:19,attribution:'© OSM © CARTO'});
+let darkTiles=L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:19});
+lightTiles.addTo(map);
+let isDark=false;
+function toggleTheme(){isDark=!isDark;document.documentElement.setAttribute('data-theme',isDark?'dark':'');document.getElementById('themeBtn').textContent=isDark?'☀️':'🌙';if(isDark){map.removeLayer(lightTiles);darkTiles.addTo(map)}else{map.removeLayer(darkTiles);lightTiles.addTo(map)}}
+function switchTab(t){['weather','disaster','traffic','health'].forEach(x=>{document.getElementById(`tab${x.charAt(0).toUpperCase()+x.slice(1)}`).className='tab-btn'+(t===x?` active-${x}`:'');document.getElementById(`content-${x}`).className='tab-content'+(t===x?' active':'')});const l=document.getElementById('panelLogo');l.className='logo';if(t==='disaster'){l.textContent='🚨';l.classList.add('disaster-mode')}else if(t==='traffic'){l.textContent='✈️';l.classList.add('traffic-mode')}else if(t==='health'){l.textContent='🌿';l.classList.add('health-mode')}else l.textContent='⚡'}
+function geolocate(){const b=document.getElementById('geoBtn');if(!navigator.geolocation)return;b.classList.add('locating');b.textContent='🔄';navigator.geolocation.getCurrentPosition(p=>{map.flyTo([p.coords.latitude,p.coords.longitude],12,{duration:1.5});b.classList.remove('locating');b.textContent='📍';fetchWeatherAt(p.coords.latitude,p.coords.longitude)},()=>{b.classList.remove('locating');b.textContent='📍'},{enableHighAccuracy:true,timeout:8000})}
+
+function getDateStr(d){return new Date(Date.now()-d*86400000).toISOString().split('T')[0]}
+function setTimeRange(days){currentTimeRangeDays=days;document.querySelectorAll('.time-range-btn').forEach(b=>b.classList.remove('active'));document.querySelector(`.time-range-btn[data-range="${days}"]`).classList.add('active');const l={1:'24h',7:'7 ημέρες',30:'30 ημέρες',365:'1 χρόνος'};document.getElementById('statsRangeText').textContent=l[days];if(quakesOn){fetchQuakes().then(l=>{if(quakeLayer)map.removeLayer(quakeLayer);quakeLayer=l;if(l)l.addTo(map)})}if(firesOn)fetchAllFires();if(floodsOn)fetchAllFloods();if(landslidesOn)fetchAllLandslides();if(volcanoesOn)fetchEONET('volcanoes',volcM,'#795548','🌋');if(hurricanesOn)fetchGDACSHurricanes();refreshStats()}
+
+// ═══ WEATHER LAYERS ═══
+const wL={rain:L.tileLayer(`https://tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png?appid=${API_KEY}`,{opacity:0.8}),wind:L.tileLayer(`https://tile.openweathermap.org/map/wind_new/{z}/{x}/{y}.png?appid=${API_KEY}`,{opacity:0.75}),temp:L.tileLayer(`https://tile.openweathermap.org/map/temp_new/{z}/{x}/{y}.png?appid=${API_KEY}`,{opacity:0.65}),clouds:L.tileLayer(`https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid=${API_KEY}`,{opacity:0.6}),pressure:L.tileLayer(`https://tile.openweathermap.org/map/pressure_new/{z}/{x}/{y}.png?appid=${API_KEY}`,{opacity:0.6}),humidity:L.tileLayer(`https://tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png?appid=${API_KEY}`,{opacity:0.6}),aqi:L.tileLayer(`https://tiles.waqi.info/tiles/usepa-aqi/{z}/{x}/{y}.png?token=${WAQI_TOKEN}`,{opacity:0.6})};
+const wA={rain:false,wind:false,temp:false,clouds:false,pressure:false,humidity:false,aqi:false};
+function toggleW(n){const b=document.querySelectorAll(`[data-layer="${n}"]`),l=document.getElementById(`legend-${n}`);if(wA[n]){if(wL[n])map.removeLayer(wL[n]);b.forEach(e=>e.classList.remove('active'));if(l)l.classList.remove('visible');wA[n]=false}else{if(wL[n])map.addLayer(wL[n]);b.forEach(e=>e.classList.add('active'));if(l)l.classList.add('visible');wA[n]=true}}
+
+// ═══ WEATHER CLICK ═══
+let clickPopup=null;
+function calculateMosquitoRisk(t,h){if(t<15||t>35)return{t:"Μηδενικός 🚫",c:"#4caf50"};if(t>=20&&t<=30&&h>=60)return{t:"Υψηλός 🦟🔴",c:"#c62828"};if(t>=18&&h>=50)return{t:"Μέτριος 🦟🟠",c:"#ff9800"};return{t:"Χαμηλός 🟢",c:"#8bc34a"}}
+function beaufort(ms){const k=ms*3.6;if(k<1)return 0;if(k<=5)return 1;if(k<=11)return 2;if(k<=19)return 3;if(k<=28)return 4;if(k<=38)return 5;if(k<=49)return 6;if(k<=61)return 7;if(k<=74)return 8;if(k<=88)return 9;if(k<=102)return 10;if(k<=117)return 11;return 12}
+function bftText(b){return['Άπνοια','Σχεδόν άπνοια','Πολύ ασθενής','Ασθενής','Μέτριος','Δροσερός','Ισχυρός','Σχεδόν θύελλα','Θύελλα','Σφοδρή θύελλα','Τυφώνας','Βίαιος τυφ.','Κυκλώνας'][b]||''}
+function windDir(deg){const d=['Β','ΒΑ','Α','ΝΑ','Ν','ΝΔ','Δ','ΒΔ'];return d[Math.round(deg/45)%8]}
+async function fetchWeatherAt(lat,lng){
+    const info=document.getElementById('weather-info'),hInfo=document.getElementById('health-info');
+    info.classList.add('loading');
+    try{
+        const[wR,uvR,marR,dustR]=await Promise.all([
+            fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lng}&appid=${API_KEY}&units=metric&lang=el`),
+            fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&daily=uv_index_max&current=wind_gusts_10m&timezone=auto`),
+            fetch(`https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lng}&current=wave_height,wave_period&hourly=sea_surface_temperature&forecast_hours=1&timezone=auto`).catch(()=>null),
+            fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lng}&current=dust`).catch(()=>null)
+        ]);
+        const d=await wR.json(),uvD=await uvR.json();
+        let marine=null,dustVal=null;
+        if(marR&&marR.ok){try{const md=await marR.json();if(md.current||md.hourly)marine={wave:md.current?.wave_height,seaTemp:md.hourly?.sea_surface_temperature?.[0]}}catch(e){}}
+        if(dustR&&dustR.ok){try{const dd=await dustR.json();if(dd.current&&dd.current.dust!=null)dustVal=dd.current.dust}catch(e){}}
+        const uv=uvD.daily?uvD.daily.uv_index_max[0]:'-';
+        const elev=uvD.elevation;
+        const gustsKmh=uvD.current?.wind_gusts_10m||(d.wind.gust?Math.round(d.wind.gust*3.6):null);
+        const temp=d.main.temp,hum=d.main.humidity,ws=d.wind.speed,press=d.main.pressure;
+        const desc=d.weather[0].description,wId=d.weather[0].id;
+        const city=d.name||`${lat.toFixed(2)}, ${lng.toFixed(2)}`;
+        const moz=calculateMosquitoRisk(temp,hum);
+        const bft=beaufort(ws),wDirTxt=windDir(d.wind.deg||0),wsKmh=Math.round(ws*3.6);
+        const windDur=Math.max(0.2,3-ws/8).toFixed(1);
+        // Swimming for coastal
+        let swimHtml='',swimPop='';
+        if(marine&&(marine.seaTemp!=null||marine.wave!=null)){
+            const sw=calcSwim(marine.seaTemp,marine.wave,ws,wId);
+            swimHtml=`<div class="weather-stat"><span class="label">🏊 Κολύμπι</span><span class="value"><span class="swim-badge" style="background:${sw.c}">🏊</span></span><span class="unit">${marine.seaTemp!=null?'🌊'+marine.seaTemp.toFixed(1)+'°C':''}${marine.wave!=null?' · '+marine.wave.toFixed(1)+'m':''}</span></div>`;
+            swimPop=`<div class="popup-row"><span class="popup-label">🏊</span><span class="popup-value" style="color:${sw.c}">${sw.t}</span></div>`;
+        }
+        info.classList.remove('loading');
+        info.innerHTML=`<div class="weather-location">📍 ${city} — ${desc}</div><div class="weather-grid">
+            <div class="weather-stat"><span class="label">🌡️ Θερμ.</span><span class="value">${temp.toFixed(1)}<span class="unit">°C</span></span></div>
+            <div class="weather-stat"><span class="label">💧 Υγρασία</span><span class="value">${hum}<span class="unit">%</span></span></div>
+            <div class="weather-stat"><span class="label">⏱️ Πίεση</span><span class="value">${press}<span class="unit">hPa</span></span></div>
+            <div class="weather-stat"><span class="label">💨 ${bft} Μπφ</span><span class="value">${wsKmh}<span class="unit">km/h</span></span><span class="unit">${wDirTxt} · ${bftText(bft)}</span></div>
+            <div class="weather-stat"><span class="label">💨 Ριπές</span><span class="value">${gustsKmh?gustsKmh+'<span class="unit">km/h</span>':'—'}</span></div>
+            <div class="weather-stat"><span class="label"><span class="wind-indicator${bft<2?' calm':''}" style="font-size:16px;--wind-dur:${windDur}s">🌀</span></span><span class="value" style="font-size:10px">${bftText(bft)}</span></div>
+            <div class="weather-stat"><span class="label">🏔️ Υψόμετρο</span><span class="value">${elev!=null?Math.round(elev)+'<span class="unit">m</span>':'—'}</span></div>
+            <div class="weather-stat"><span class="label">☀️ UV</span><span class="value" style="color:${uv>7?'#c62828':uv>5?'#ff9800':'#4caf50'}">${uv}</span></div>
+            ${swimHtml||`<div class="weather-stat"><span class="label">🦟 Κουνούπια</span><span class="value" style="font-size:10px;color:${moz.c}">${moz.t.split(' ')[0]}</span></div>`}
+        </div>${gustsKmh&&gustsKmh>=40?`<div class="gust-bar">⚠️ Ριπές ανέμου: ${gustsKmh} km/h</div>`:''}${dustVal!=null&&dustVal>=10?`<div class="gust-bar" style="background:rgba(191,128,64,0.15);border-color:rgba(191,128,64,0.3);color:#8d6e63">🌫️ Σκόνη: ${dustVal.toFixed(1)} μg/m³</div>`:''}`;
+        hInfo.innerHTML=`<div class="weather-location" style="color:var(--accent-health)">📍 ${city}</div><div class="loading-inline"><div class="loading-spinner"></div> Φόρτωση Open-Meteo...</div>`;
+        fetchHealthData(lat,lng,city,moz,uv,{temp:d.main.temp,hum:d.main.humidity,wind:d.wind.speed,wId:d.weather[0].id,rain:(d.rain?d.rain['1h']||0:0)});
+        if(clickPopup)map.closePopup(clickPopup);
+        const dustPop=dustVal!=null&&dustVal>=10?`<div class="popup-row"><span class="popup-label">🌫️ Σκόνη</span><span class="popup-value" style="color:#8d6e63">${dustVal.toFixed(0)} μg/m³</span></div>`:'';
+        clickPopup=L.popup().setLatLng([lat,lng]).setContent(`<div class="popup-content"><div class="popup-title">${city}</div><div class="popup-row"><span class="popup-label">🌡️</span><span class="popup-value">${temp.toFixed(1)}°C</span></div><div class="popup-row"><span class="popup-label">💨</span><span class="popup-value">${bft} Μπφ · ${wDirTxt} ${wsKmh}km/h</span></div>${gustsKmh?`<div class="popup-row"><span class="popup-label">💨 Ριπές</span><span class="popup-value">${gustsKmh} km/h</span></div>`:''}${swimPop}${dustPop}<div class="popup-row"><span class="popup-label">☀️ UV</span><span class="popup-value">${uv}</span></div><div class="popup-row"><span class="popup-label">🦟</span><span class="popup-value">${moz.t.split(' ')[0]}</span></div></div>`).openOn(map);
+        fetch5Day(lat,lng);checkAlerts(d);
+    }catch(e){info.classList.remove('loading');info.innerHTML='<div class="no-data">Σφάλμα σύνδεσης</div>'}
+}
+map.on('click',e=>{if(!distMode)fetchWeatherAt(e.latlng.lat,e.latlng.lng)});
+
+async function fetch5Day(lat,lng){const dn=['Κυρ','Δευ','Τρι','Τετ','Πεμ','Παρ','Σαβ'],wi={'01':'☀️','02':'⛅','03':'☁️','04':'☁️','09':'🌧️','10':'🌦️','11':'⛈️','13':'🌨️','50':'🌫️'};try{const r=await fetch(`https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lng}&appid=${API_KEY}&units=metric&lang=el&cnt=40`);const data=await r.json();const daily={};data.list.forEach(i=>{const dt=i.dt_txt.split(' ')[0];if(!daily[dt])daily[dt]={temps:[],icons:[],rain:0};daily[dt].temps.push(i.main.temp);daily[dt].icons.push(i.weather[0].icon.substring(0,2));daily[dt].rain+=(i.rain?i.rain['3h']:0)||0});const keys=Object.keys(daily).slice(1,6),row=document.getElementById('forecast-row');row.innerHTML='';keys.forEach(k=>{const d=daily[k],date=new Date(k),hi=Math.round(Math.max(...d.temps)),lo=Math.round(Math.min(...d.temps)),ic=d.icons.sort((a,b)=>d.icons.filter(v=>v===a).length-d.icons.filter(v=>v===b).length).pop();row.innerHTML+=`<div class="forecast-day"><div class="f-date">${dn[date.getDay()]}</div><div class="f-icon">${wi[ic]||'🌤️'}</div><div class="f-temp">${hi}°/${lo}°</div>${d.rain>0?`<div class="f-rain">💧${d.rain.toFixed(1)}</div>`:''}</div>`});document.getElementById('forecast-section').style.display='block'}catch(e){}}
+function checkAlerts(d){
+    const a=document.getElementById('weather-alerts');a.innerHTML='';const al=[];
+    if(d.main.temp>=40)al.push({type:'danger',icon:'🔴',title:'Ακραίος Καύσωνας',msg:`${d.main.temp.toFixed(1)}°C`});
+    else if(d.main.temp>=35)al.push({type:'warning',icon:'🟠',title:'Καύσωνας',msg:`${d.main.temp.toFixed(1)}°C`});
+    if(d.main.temp<=-10)al.push({type:'danger',icon:'🔴',title:'Ακραίο Ψύχος',msg:`${d.main.temp.toFixed(1)}°C`});
+    else if(d.main.temp<=0)al.push({type:'warning',icon:'🟠',title:'Παγετός',msg:`${d.main.temp.toFixed(1)}°C`});
+    if(d.wind.speed>=25)al.push({type:'danger',icon:'🔴',title:'Θύελλα',msg:`${d.wind.speed} m/s`});
+    else if(d.wind.speed>=15)al.push({type:'warning',icon:'🟠',title:'Ισχυρός Άνεμος',msg:`${d.wind.speed} m/s`});
+    const rain1h=d.rain?d.rain['1h']||0:0;
+    if(rain1h>=20)al.push({type:'danger',icon:'🔴',title:'Σφοδρή Βροχή',msg:`${rain1h} mm/h`});
+    else if(rain1h>=5)al.push({type:'warning',icon:'🟠',title:'Βροχή',msg:`${rain1h} mm/h`});
+    al.forEach(x=>{a.innerHTML+=`<div class="alert-box ${x.type} visible"><div class="alert-title">${x.icon} ${x.title}</div>${x.msg}</div>`;showNotification(x.icon,x.title,x.msg,x.type)});
+}
+async function searchCity(){const c=document.getElementById('searchInput').value.trim();if(!c)return;try{const r=await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(c)}`);const d=await r.json();if(d.length>0){const lat=parseFloat(d[0].lat),lon=parseFloat(d[0].lon);map.flyTo([lat,lon],10,{duration:1.5});fetchWeatherAt(lat,lon)}}catch(e){}}
+document.getElementById('searchBtn').addEventListener('click',searchCity);
+document.getElementById('searchInput').addEventListener('keypress',e=>{if(e.key==='Enter')searchCity()});
+// ═══ DISASTER HELPERS ═══
+function clearMarkers(arr){arr.forEach(m=>map.removeLayer(m));arr.length=0}
+
+async function fetchEONET(cat,arr,color,icon){
+    const days=currentTimeRangeDays;
+    try{const r=await fetch(`https://eonet.gsfc.nasa.gov/api/v3/events?category=${cat}&status=open&days=${Math.min(days,365)}`);const d=await r.json();const ev=d.events||[];
+    ev.forEach(e=>{const g=e.geometry;if(!g||!g.length)return;const lt=g[g.length-1];const c=lt.coordinates;if(!c||c.length<2)return;
+    const m=L.circleMarker([c[1],c[0]],{radius:7,fillColor:color,color:color,weight:1,opacity:0.9,fillOpacity:0.6}).bindPopup(`<div class="popup-content"><div class="popup-title">${icon} ${e.title}</div><div class="popup-row"><span class="popup-label">Ημ/νία</span><span class="popup-value">${(lt.date||'').split('T')[0]}</span></div></div>`);
+    m.addTo(map);arr.push(m)});return ev.length}catch(e){return 0}}
+
+async function fetchGDACS(eventType,arr,color,icon){
+    const from=getDateStr(currentTimeRangeDays),to=getDateStr(0);
+    try{const r=await fetch(`https://www.gdacs.org/gdacsapi/api/events/geteventlist/SEARCH?eventlist=${eventType}&fromdate=${from}&todate=${to}&alertlevel=red;orange;green`);const d=await r.json();const features=d.features||[];
+    features.forEach(f=>{const coords=f.geometry?.coordinates;if(!coords||coords.length<2)return;const lat=coords[1],lng=coords[0];const p=f.properties||{};const name=p.name||p.eventname||eventType;const al=p.alertlevel||'';
+    let rad=8;if(al==='Red')rad=14;else if(al==='Orange')rad=11;
+    const m=L.circleMarker([lat,lng],{radius:rad,fillColor:color,color:color,weight:2,opacity:0.9,fillOpacity:0.5}).bindPopup(`<div class="popup-content"><div class="popup-title">${icon} ${name}</div>${al?`<div class="popup-row"><span class="popup-label">Alert</span><span class="popup-value" style="color:${al==='Red'?'#c62828':'#ff9800'}">${al}</span></div>`:''}</div>`);
+    m.addTo(map);arr.push(m)});return features.length}catch(e){return 0}}
+
+// ── QUAKES ──
+let quakeLayer=null,quakesOn=false;
+async function fetchQuakes(){
+    const days=currentTimeRangeDays;
+    try{let url;if(days<=1)url='https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson';else if(days<=7)url='https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson';else if(days<=30)url='https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_month.geojson';else url=`https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime=${getDateStr(days)}&minmagnitude=4&limit=500`;
+    const r=await fetch(url);const d=await r.json();const features=d.features||[];
+    document.getElementById('statQuakes').textContent=features.length;
+    if(quakeLayer)map.removeLayer(quakeLayer);
+    quakeLayer=L.geoJSON({type:'FeatureCollection',features},{pointToLayer:(f,ll)=>{const m=f.properties.mag;let c='#ffeb3b',rad=4;if(m>=6){c='#b71c1c';rad=14}else if(m>=4.5){c='#f44336';rad=10}else if(m>=2.5){c='#ff9800';rad=7}return L.circleMarker(ll,{radius:rad,fillColor:c,color:c,weight:1,opacity:0.8,fillOpacity:0.5})},onEachFeature:(f,layer)=>{const p=f.properties;layer.bindPopup(`<div class="popup-content"><div class="popup-title">🔴 ${p.mag.toFixed(1)}M</div><div class="popup-row"><span class="popup-label">Τοπο</span><span class="popup-value" style="font-size:9px">${p.place}</span></div><div class="popup-row"><span class="popup-label">Ημ/νία</span><span class="popup-value">${new Date(p.time).toLocaleDateString('el-GR')}</span></div></div>`)}});
+    // Notify big quakes
+    const big=features.filter(f=>f.properties.mag>=5);
+    if(big.length>0)showNotification('🔴',`${big.length} σεισμοί ≥5.0M`,`Τελ. ${days<=1?'24h':days+'μ'}`,big.some(f=>f.properties.mag>=6)?'danger':'warning');
+    return quakeLayer}catch(e){return null}}
+function toggleQuakes(){const b=document.querySelector('[data-layer="quakes"]'),l=document.getElementById('legend-quakes');if(quakesOn){if(quakeLayer)map.removeLayer(quakeLayer);b.classList.remove('active');l.classList.remove('visible');quakesOn=false}else{b.classList.add('active');l.classList.add('visible');quakesOn=true;fetchQuakes().then(x=>{if(x)x.addTo(map)})}}
+
+// ── FIRES ──
+let firesOn=false,fireM=[];
+async function fetchAllFires(){clearMarkers(fireM);const[a,b]=await Promise.all([fetchEONET('wildfires',fireM,'#ff6f00','🔥'),fetchGDACS('WF',fireM,'#ff3d00','🔥')]);const total=a+b;document.getElementById('statFires').textContent=total;if(total>0)showNotification('🔥',`${total} πυρκαγιές`,null,'warning')}
+function toggleFires(){const b=document.querySelector('[data-layer="fires"]'),l=document.getElementById('legend-fires');if(firesOn){clearMarkers(fireM);b.classList.remove('active');l.classList.remove('visible');firesOn=false}else{b.classList.add('active');l.classList.add('visible');firesOn=true;fetchAllFires()}}
+
+// ── FLOODS ──
+let floodsOn=false,floodM=[];
+async function fetchAllFloods(){clearMarkers(floodM);const[a,b]=await Promise.all([fetchEONET('floods',floodM,'#0288d1','🌊'),fetchGDACS('FL',floodM,'#01579b','🌊')]);document.getElementById('statFloods').textContent=a+b}
+function toggleFloods(){const b=document.querySelector('[data-layer="floods"]'),l=document.getElementById('legend-floods');if(floodsOn){clearMarkers(floodM);b.classList.remove('active');l.classList.remove('visible');floodsOn=false}else{b.classList.add('active');l.classList.add('visible');floodsOn=true;fetchAllFloods()}}
+
+// ═══ LANDSLIDES (FIXED — GDACS + NASA Global Landslide Catalog) ═══
+let landslidesOn=false,landM=[];
+async function fetchAllLandslides(){
+    clearMarkers(landM);
+    let total=0;
+
+    // 1) GDACS Landslides (LS)
+    const gdacsCount = await fetchGDACS('LS',landM,'#5d4037','🪨');
+    total += gdacsCount;
+
+    // 2) NASA Global Landslide Catalog via COOLR / ArcGIS
+    try{
+        const days=currentTimeRangeDays;
+        const fromDate=getDateStr(days);
+        // NASA Cooperative Open Online Landslide Repository
+        const url=`https://maps.nccs.nasa.gov/arcgis/rest/services/global_landslide_catalog/global_landslide_catalog_point/FeatureServer/0/query?where=event_date>='${fromDate}'&outFields=event_title,event_date,country_name,landslide_category,fatality_count,source_name&f=json&resultRecordCount=200`;
+        const r=await fetch(url);
+        if(r.ok){
+            const d=await r.json();
+            const features=d.features||[];
+            features.forEach(f=>{
+                const a=f.attributes||{};
+                const g=f.geometry;
+                if(!g||!g.x||!g.y)return;
+                const title=a.event_title||a.landslide_category||'Κατολίσθηση';
+                const date=a.event_date?new Date(a.event_date).toLocaleDateString('el-GR'):'';
+                const country=a.country_name||'';
+                const fatalities=a.fatality_count||0;
+                const source=a.source_name||'NASA';
+                const m=L.circleMarker([g.y,g.x],{radius:8,fillColor:'#8d6e63',color:'#5d4037',weight:1.5,opacity:0.85,fillOpacity:0.5})
+                    .bindPopup(`<div class="popup-content"><div class="popup-title">🪨 ${title}</div>${country?`<div class="popup-row"><span class="popup-label">Χώρα</span><span class="popup-value">${country}</span></div>`:''}${date?`<div class="popup-row"><span class="popup-label">Ημ/νία</span><span class="popup-value">${date}</span></div>`:''}${fatalities?`<div class="popup-row"><span class="popup-label">Θύματα</span><span class="popup-value" style="color:#c62828">${fatalities}</span></div>`:''}
+                    <div class="popup-row"><span class="popup-label">Πηγή</span><span class="popup-value">${source}</span></div></div>`);
+                m.addTo(map);landM.push(m);total++;
+            });
+        }
+    }catch(e){console.error('NASA Landslides:',e)}
+
+    // 3) Fallback: EONET "landslides" (may return data sometimes)
+    if(total===0){
+        try{
+            const eonet=await fetchEONET('landslides',landM,'#8d6e63','🪨');
+            total+=eonet;
+        }catch(e){}
+    }
+
+    if(total>0)showNotification('🪨',`${total} κατολισθήσεις`,null,'info');
+    else showNotification('🪨','Δεν βρέθηκαν κατολισθήσεις','Δοκίμασε μεγαλύτερο χρονικό εύρος','info');
+}
+function toggleLandslides(){const b=document.querySelector('[data-layer="landslides"]'),l=document.getElementById('legend-landslides');if(landslidesOn){clearMarkers(landM);b.classList.remove('active');l.classList.remove('visible');landslidesOn=false}else{b.classList.add('active');l.classList.add('visible');landslidesOn=true;fetchAllLandslides()}}
+
+// ── VOLCANOES ──
+let volcanoesOn=false,volcM=[];
+function toggleVolcanoes(){const b=document.querySelector('[data-layer="volcanoes"]');if(volcanoesOn){clearMarkers(volcM);b.classList.remove('active');volcanoesOn=false}else{b.classList.add('active');volcanoesOn=true;fetchEONET('volcanoes',volcM,'#795548','🌋').then(n=>{if(n>0)showNotification('🌋',`${n} ηφαίστεια`,null,'warning')})}}
+
+// ── HURRICANES (GDACS) ──
+let hurricanesOn=false,hurM=[];
+async function fetchGDACSHurricanes(){
+    clearMarkers(hurM);const list=document.getElementById('active-storms-list'),st=document.getElementById('hurricane-status');
+    list.innerHTML='<div class="loading-inline"><div class="loading-spinner"></div> Αναζήτηση...</div>';
+    const from=getDateStr(currentTimeRangeDays),to=getDateStr(0);
+    try{const r=await fetch(`https://www.gdacs.org/gdacsapi/api/events/geteventlist/SEARCH?eventlist=TC&fromdate=${from}&todate=${to}&alertlevel=red;orange;green`);const d=await r.json();const features=d.features||[];
+    document.getElementById('statHurricanes').textContent=features.length;list.innerHTML='';
+    if(!features.length){list.innerHTML='<div style="font-size:9px;color:#ff9800;text-align:center">Κανένας τυφώνας</div>';st.className='api-status visible success';st.textContent=`✓ GDACS OK — 0`}
+    else{st.className='api-status visible success';st.textContent=`✓ ${features.length} τυφώνες`;showNotification('🌀',`${features.length} τυφώνες!`,null,'danger')}
+    features.forEach(f=>{const coords=f.geometry?.coordinates;if(!coords||coords.length<2)return;const lat=coords[1],lng=coords[0];const p=f.properties||{};const name=p.name||p.eventname||'Τυφώνας';const al=p.alertlevel||'';
+    const icon=L.divIcon({className:'hurricane-icon',html:'🌀',iconSize:[24,24],iconAnchor:[12,12]});
+    const m=L.marker([lat,lng],{icon}).bindPopup(`<div class="popup-content"><div class="popup-title">🌀 ${name}</div>${al?`<div class="popup-row"><span class="popup-label">Alert</span><span class="popup-value" style="color:${al==='Red'?'#c62828':'#ff9800'}">${al}</span></div>`:''}</div>`);
+    m.addTo(map);const c=L.circleMarker([lat,lng],{radius:22,fillColor:'#c62828',color:'#b71c1c',weight:2,opacity:0.7,fillOpacity:0.2}).addTo(map);hurM.push(m,c);
+    const item=document.createElement('div');item.className='storm-item';item.innerHTML=`<span class="s-name">🌀 ${name}</span><span class="s-detail">${al}</span>`;item.onclick=()=>{map.flyTo([lat,lng],6);m.openPopup()};list.appendChild(item)})}
+    catch(e){document.getElementById('statHurricanes').textContent='—';list.innerHTML='';st.className='api-status visible error';st.textContent='✗ GDACS error'}}
+function toggleHurricanes(){const b=document.querySelector('[data-layer="hurricanes"]'),l=document.getElementById('legend-hurricanes');if(hurricanesOn){clearMarkers(hurM);b.classList.remove('active');l.classList.remove('visible');hurricanesOn=false}else{b.classList.add('active');l.classList.add('visible');hurricanesOn=true;fetchGDACSHurricanes()}}
+
+// ── PLATES ──
+let platesLayer=null,platesOn=false;
+function togglePlates(){const b=document.querySelector('[data-layer="plates"]');if(platesOn){if(platesLayer)map.removeLayer(platesLayer);b.classList.remove('active');platesOn=false}else{b.classList.add('active');platesOn=true;fetch('https://raw.githubusercontent.com/fraxen/tectonicplates/master/GeoJSON/PB2002_boundaries.json').then(r=>r.json()).then(d=>{platesLayer=L.geoJSON(d,{style:{color:'#ff9800',weight:2,dashArray:'5,5'}}).addTo(map)})}}
+// ═══ TRAFFIC (TomTom) ═══
+let trafficLayer=null,trafficOn=false;
+function toggleTraffic(){
+    const b=document.querySelector('[data-layer="traffic"]'),l=document.getElementById('legend-traffic');
+    if(trafficOn){if(trafficLayer)map.removeLayer(trafficLayer);b.classList.remove('active');l.classList.remove('visible');trafficOn=false}
+    else{
+        trafficLayer=L.tileLayer(`https://api.tomtom.com/traffic/map/4/tile/flow/relative0/{z}/{x}/{y}.png?key=${TOMTOM_KEY}&tileSize=256`,{opacity:0.75,maxZoom:18,attribution:'© TomTom'});
+        trafficLayer.addTo(map);b.classList.add('active');l.classList.add('visible');trafficOn=true;
+        showNotification('🚗','Car Traffic','TomTom Live Flow','info');
+    }
+}
+
+let flightsOn=false,flightM=[];
+async function fetchFlights(){if(!flightsOn)return;flightM.forEach(m=>map.removeLayer(m));flightM=[];try{const bounds=map.getBounds();const r=await fetch(`https://opensky-network.org/api/states/all?lamin=${bounds.getSouth()}&lomin=${bounds.getWest()}&lamax=${bounds.getNorth()}&lomax=${bounds.getEast()}`);const d=await r.json();const st=d.states||[];document.getElementById('statFlights').textContent=st.length;st.slice(0,50).forEach(s=>{if(s[6]&&s[5]){const ic=L.divIcon({className:'',html:`<div class="plane-icon" style="transform:rotate(${s[10]-45}deg)">✈️</div>`});const m=L.marker([s[6],s[5]],{icon:ic}).bindPopup(`✈️ ${s[1]||'N/A'}`);m.addTo(map);flightM.push(m)}})}catch(e){document.getElementById('statFlights').textContent='—'}}
+function toggleFlights(){const b=document.querySelector('[data-layer="flights"]'),l=document.getElementById('legend-flights');if(flightsOn){flightsOn=false;flightM.forEach(m=>map.removeLayer(m));flightM=[];b.classList.remove('active');l.classList.remove('visible');map.off('moveend',fetchFlights)}else{flightsOn=true;b.classList.add('active');l.classList.add('visible');fetchFlights();map.on('moveend',fetchFlights)}}
+
+let issOn=false,issMarker=null,issInt=null;
+function toggleISS(){const b=document.querySelector('[data-layer="iss"]');if(issOn){issOn=false;if(issMarker)map.removeLayer(issMarker);clearInterval(issInt);b.classList.remove('active');document.getElementById('statISS').textContent='Off'}else{issOn=true;b.classList.add('active');const f=async()=>{try{const r=await fetch('https://api.wheretheiss.at/v1/satellites/25544');const d=await r.json();if(!issMarker){issMarker=L.marker([d.latitude,d.longitude],{icon:L.divIcon({html:'<div class="iss-icon">🛰️</div>'})}).addTo(map);map.flyTo([d.latitude,d.longitude],4)}else issMarker.setLatLng([d.latitude,d.longitude]);document.getElementById('statISS').textContent=Math.round(d.velocity)+'km/h'}catch(e){}};f();issInt=setInterval(f,3000)}}
+
+// ═══ SHIPS (OpenSeaMap + AIS REST fallback) ═══
+let shipsOn=false,shipMarkers={},shipCount=0,seaMapLayer=null,shipFetchInt=null;
+function getShipEmoji(t){if(t>=70&&t<=79)return'🚛';if(t>=80&&t<=89)return'⛽';if(t>=60&&t<=69)return'🛳️';return'🚢'}
+function getShipColor(t){if(t>=70&&t<=79)return'#1565c0';if(t>=80&&t<=89)return'#2e7d32';if(t>=60&&t<=69)return'#f57c00';return'#0d47a1'}
+async function fetchShipPositions(){
+    if(!shipsOn)return;
+    const bounds=map.getBounds(),z=map.getZoom();
+    if(z<7){document.getElementById('statShips').textContent='Zoom+';return}
+    // Try multiple free AIS sources
+    let loaded=false;
+    // Method 1: BarentsWatch / public AIS proxy attempts
+    try{
+        const sw=bounds.getSouthWest(),ne=bounds.getNorthEast();
+        const url=`https://meri.digitraffic.fi/api/ais/v1/locations?latitude=${bounds.getCenter().lat}&longitude=${bounds.getCenter().lng}&radius=100&from=${new Date(Date.now()-300000).toISOString()}`;
+        const r=await fetch(url);
+        if(r.ok){
+            const d=await r.json();
+            const features=d.features||[];
+            // Clear old markers not in new data
+            const newIds=new Set();
+            features.forEach(f=>{
+                const p=f.properties||{},g=f.geometry?.coordinates;
+                if(!g||g.length<2)return;
+                const mmsi=String(p.mmsi||''),lat=g[1],lng=g[0],sog=(p.sog||0)/10,cog=(p.cog||0)/10,st=p.shipType||0;
+                if(!lat||!lng||!mmsi)return;
+                newIds.add(mmsi);
+                if(shipMarkers[mmsi]){shipMarkers[mmsi].setLatLng([lat,lng])}
+                else{
+                    const ic=L.divIcon({className:'',html:`<div class="ship-icon" style="transform:rotate(${cog-45}deg);color:${getShipColor(st)}">${getShipEmoji(st)}</div>`,iconSize:[18,18],iconAnchor:[9,9]});
+                    const m=L.marker([lat,lng],{icon:ic}).bindPopup(`<div class="popup-content"><div class="popup-title">🚢 MMSI: ${mmsi}</div><div class="popup-row"><span class="popup-label">Ταχύτητα</span><span class="popup-value">${sog.toFixed(1)} kn</span></div><div class="popup-row"><span class="popup-label">Πορεία</span><span class="popup-value">${cog.toFixed(0)}°</span></div></div>`);
+                    m.addTo(map);shipMarkers[mmsi]=m;
+                }
+            });
+            shipCount=Object.keys(shipMarkers).length;
+            document.getElementById('statShips').textContent=shipCount;
+            if(features.length>0)loaded=true;
+        }
+    }catch(e){}
+    // Method 2: AISStream WebSocket fallback
+    if(!loaded){
+        try{
+            const sw=bounds.getSouthWest(),ne=bounds.getNorthEast();
+            const ws=new WebSocket('wss://stream.aisstream.io/v0/stream');
+            let wsTimeout=setTimeout(()=>{ws.close()},8000);
+            let gotData=false;
+            ws.onopen=function(){ws.send(JSON.stringify({APIKey:AIS_KEY,BoundingBoxes:[[[sw.lat,sw.lng],[ne.lat,ne.lng]]],FilterMessageTypes:['PositionReport']}))};
+            ws.onmessage=function(ev){
+                try{
+                    gotData=true;
+                    const msg=JSON.parse(ev.data);if(!msg.Message||!msg.Message.PositionReport)return;
+                    const pos=msg.Message.PositionReport,meta=msg.MetaData||{},mmsi=String(meta.MMSI||''),lat=pos.Latitude,lng=pos.Longitude,name=(meta.ShipName||'').trim()||'Unknown',cog=pos.Cog||0,sog=pos.Sog||0,st=meta.ShipType||0;
+                    if(!lat||!lng)return;
+                    if(shipMarkers[mmsi]){shipMarkers[mmsi].setLatLng([lat,lng])}
+                    else{const ic=L.divIcon({className:'',html:`<div class="ship-icon" style="transform:rotate(${cog-45}deg);color:${getShipColor(st)}">${getShipEmoji(st)}</div>`,iconSize:[18,18],iconAnchor:[9,9]});const m=L.marker([lat,lng],{icon:ic}).bindPopup(`<div class="popup-content"><div class="popup-title">🚢 ${name}</div><div class="popup-row"><span class="popup-label">Ταχύτητα</span><span class="popup-value">${sog.toFixed(1)} kn</span></div></div>`);m.addTo(map);shipMarkers[mmsi]=m;shipCount++;document.getElementById('statShips').textContent=shipCount}
+                }catch(e){}
+            };
+            ws.onerror=function(){clearTimeout(wsTimeout)};
+            ws.onclose=function(){clearTimeout(wsTimeout);if(!gotData&&shipsOn)document.getElementById('statShips').textContent=shipCount||'0'};
+            // Auto-close after 10s to avoid hanging connections
+            setTimeout(()=>{if(ws.readyState<=1)ws.close()},10000);
+        }catch(e){}
+    }
+    if(!loaded&&shipCount===0){document.getElementById('statShips').textContent='0'}
+}
+function clearShips(){Object.values(shipMarkers).forEach(m=>map.removeLayer(m));shipMarkers={};shipCount=0;document.getElementById('statShips').textContent='—'}
+let shipTimer=null;
+function reconnectShips(){if(!shipsOn)return;clearTimeout(shipTimer);shipTimer=setTimeout(()=>{fetchShipPositions()},2000)}
+function toggleShips(){
+    const b=document.querySelector('[data-layer="ships"]'),l=document.getElementById('legend-ships');
+    if(shipsOn){
+        shipsOn=false;clearInterval(shipFetchInt);
+        if(seaMapLayer)map.removeLayer(seaMapLayer);seaMapLayer=null;
+        clearShips();b.classList.remove('active');l.classList.remove('visible');
+        map.off('moveend',reconnectShips);
+    }else{
+        shipsOn=true;b.classList.add('active');l.classList.add('visible');
+        // OpenSeaMap tiles (nautical marks, ports, buoys — always works)
+        seaMapLayer=L.tileLayer('https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png',{opacity:0.8,maxZoom:18});
+        seaMapLayer.addTo(map);
+        // Fetch live ship positions
+        fetchShipPositions();
+        shipFetchInt=setInterval(fetchShipPositions,15000);
+        map.on('moveend',reconnectShips);
+        showNotification('🚢','Πλοία','Digitraffic AIS + OpenSeaMap','info');
+    }
+}
+
+// ═══ TRAINS (OpenRailwayMap + Digitraffic Finland) ═══
+let trainsOn=false,trainsLayer=null,trainMarkers=[],trainFetchInt=null;
+async function fetchLiveTrains(){
+    if(!trainsOn)return;
+    trainMarkers.forEach(m=>map.removeLayer(m));trainMarkers=[];
+    try{
+        const r=await fetch('https://rata.digitraffic.fi/api/v1/train-locations/latest/');
+        if(!r.ok)return;
+        const trains=await r.json();
+        const bounds=map.getBounds();
+        let count=0;
+        trains.forEach(t=>{
+            if(!t.location||!t.location.coordinates)return;
+            const lng=t.location.coordinates[0],lat=t.location.coordinates[1];
+            if(!bounds.contains([lat,lng]))return;
+            const speed=t.speed||0;
+            const ic=L.divIcon({className:'train-dot',html:'🚆',iconSize:[16,16],iconAnchor:[8,8]});
+            const m=L.marker([lat,lng],{icon:ic}).bindPopup(`<div class="popup-content"><div class="popup-title">🚆 Train ${t.trainNumber}</div><div class="popup-row"><span class="popup-label">Ταχύτητα</span><span class="popup-value">${speed} km/h</span></div><div class="popup-row"><span class="popup-label">Ημ/νία</span><span class="popup-value">${t.departureDate||''}</span></div></div>`);
+            m.addTo(map);trainMarkers.push(m);count++;
+        });
+        document.getElementById('statTrains').textContent=count;
+    }catch(e){document.getElementById('statTrains').textContent='—'}
+}
+function toggleTrains(){
+    const b=document.querySelector('[data-layer="trains"]'),l=document.getElementById('legend-trains');
+    if(trainsOn){
+        trainsOn=false;clearInterval(trainFetchInt);
+        if(trainsLayer)map.removeLayer(trainsLayer);trainsLayer=null;
+        trainMarkers.forEach(m=>map.removeLayer(m));trainMarkers=[];
+        b.classList.remove('active');l.classList.remove('visible');
+        document.getElementById('statTrains').textContent='—';
+    }else{
+        trainsOn=true;b.classList.add('active');l.classList.add('visible');
+        trainsLayer=L.tileLayer('https://{s}.tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png',{maxZoom:19,opacity:0.7});
+        trainsLayer.addTo(map);
+        fetchLiveTrains();
+        trainFetchInt=setInterval(fetchLiveTrains,10000);
+        showNotification('🚆','Τρένα Live','OpenRailwayMap + Digitraffic Finland','info');
+    }
+}
+
+// ═══ BIKES & SCOOTERS (CityBikes API — global) ═══
+let scootersOn=false,scooterMarkers=[],scooterNetworks=null,scooterFetchInt=null;
+async function fetchCityBikeNetworks(){
+    if(scooterNetworks)return scooterNetworks;
+    try{
+        const r=await fetch('https://api.citybik.es/v2/networks?fields=id,name,location');
+        const d=await r.json();
+        scooterNetworks=d.networks||[];
+        return scooterNetworks;
+    }catch(e){return []}
+}
+async function fetchNearbyBikes(){
+    if(!scootersOn)return;
+    scooterMarkers.forEach(m=>map.removeLayer(m));scooterMarkers=[];
+    const bounds=map.getBounds(),zoom=map.getZoom();
+    if(zoom<11){document.getElementById('statScooters').textContent='Zoom+';return}
+    const networks=await fetchCityBikeNetworks();
+    const nearby=networks.filter(n=>n.location&&bounds.contains([n.location.latitude,n.location.longitude]));
+    if(nearby.length===0){document.getElementById('statScooters').textContent='0';return}
+    let totalBikes=0;
+    for(const net of nearby.slice(0,3)){
+        try{
+            const r=await fetch(`https://api.citybik.es/v2/networks/${net.id}?fields=stations`);
+            const d=await r.json();
+            const stations=(d.network?.stations)||[];
+            stations.forEach(s=>{
+                if(!s.latitude||!s.longitude||!bounds.contains([s.latitude,s.longitude]))return;
+                const bikes=s.free_bikes||0,slots=s.empty_slots||0,ebikes=s.extra?.ebikes||0;
+                const color=bikes>5?'#00c853':bikes>0?'#ff9800':'#f44336';
+                const m=L.circleMarker([s.latitude,s.longitude],{radius:5,fillColor:color,color:color,weight:1,opacity:0.8,fillOpacity:0.6})
+                    .bindPopup(`<div class="popup-content"><div class="popup-title">🛴 ${s.name}</div><div class="popup-row"><span class="popup-label">🚲 Διαθέσιμα</span><span class="popup-value" style="color:${color}">${bikes}</span></div>${ebikes?`<div class="popup-row"><span class="popup-label">⚡ E-bikes</span><span class="popup-value">${ebikes}</span></div>`:''}
+                    <div class="popup-row"><span class="popup-label">Κενές θέσεις</span><span class="popup-value">${slots}</span></div><div class="popup-row"><span class="popup-label">Δίκτυο</span><span class="popup-value" style="font-size:8px">${net.name}</span></div></div>`);
+                m.addTo(map);scooterMarkers.push(m);totalBikes+=bikes;
+            });
+        }catch(e){}
+    }
+    document.getElementById('statScooters').textContent=totalBikes;
+}
+let scooterTimer=null;
+function reconnectScooters(){if(!scootersOn)return;clearTimeout(scooterTimer);scooterTimer=setTimeout(fetchNearbyBikes,2000)}
+function toggleScooters(){
+    const b=document.querySelector('[data-layer="scooters"]'),l=document.getElementById('legend-scooters');
+    if(scootersOn){
+        scootersOn=false;clearInterval(scooterFetchInt);clearTimeout(scooterTimer);
+        scooterMarkers.forEach(m=>map.removeLayer(m));scooterMarkers=[];
+        b.classList.remove('active');l.classList.remove('visible');
+        map.off('moveend',reconnectScooters);
+        document.getElementById('statScooters').textContent='—';
+    }else{
+        scootersOn=true;b.classList.add('active');l.classList.add('visible');
+        fetchNearbyBikes();
+        scooterFetchInt=setInterval(fetchNearbyBikes,60000);
+        map.on('moveend',reconnectScooters);
+        showNotification('🛴','Bikes & Scooters','CityBikes API — Παγκόσμια κάλυψη','info');
+    }
+}
+
+// ═══ METRO (Overpass API — subway + tram stations) ═══
+let metroOn=false,metroMarkers=[],metroTimer=null;
+async function fetchMetroStations(){
+    if(!metroOn)return;
+    metroMarkers.forEach(m=>map.removeLayer(m));metroMarkers=[];
+    const z=map.getZoom();
+    if(z<11){document.getElementById('statMetro').textContent='Zoom+';return}
+    const b=map.getBounds(),s=b.getSouth(),w=b.getWest(),n=b.getNorth(),e=b.getEast();
+    try{
+        const query=`[out:json][timeout:10];(node["railway"="station"]["station"="subway"](${s},${w},${n},${e});node["railway"="station"]["station"="light_rail"](${s},${w},${n},${e});node["railway"="tram_stop"](${s},${w},${n},${e}););out body 200;`;
+        const r=await fetch('https://overpass-api.de/api/interpreter',{method:'POST',body:'data='+encodeURIComponent(query)});
+        const d=await r.json();
+        let count=0;
+        (d.elements||[]).forEach(el=>{
+            if(!el.lat||!el.lon)return;
+            const name=el.tags?.name||'Σταθμός';
+            const isTram=el.tags?.railway==='tram_stop';
+            const ic=L.divIcon({className:'',html:`<div class="metro-icon${isTram?' tram':''}">${isTram?'T':'M'}</div>`,iconSize:[22,22],iconAnchor:[11,11]});
+            const m=L.marker([el.lat,el.lon],{icon:ic})
+                .bindPopup(`<div class="popup-content"><div class="popup-title">${isTram?'🚊':'🚇'} ${name}</div>${el.tags?.network?`<div class="popup-row"><span class="popup-label">Δίκτυο</span><span class="popup-value">${el.tags.network}</span></div>`:''}</div>`);
+            m.addTo(map);metroMarkers.push(m);count++;
+        });
+        document.getElementById('statMetro').textContent=count;
+    }catch(e){document.getElementById('statMetro').textContent='—'}
+}
+function onMetroMove(){if(!metroOn)return;clearTimeout(metroTimer);metroTimer=setTimeout(fetchMetroStations,1500)}
+function toggleMetro(){
+    const b=document.querySelector('[data-layer="metro"]'),l=document.getElementById('legend-metro');
+    if(metroOn){
+        metroOn=false;clearTimeout(metroTimer);
+        metroMarkers.forEach(m=>map.removeLayer(m));metroMarkers=[];
+        b.classList.remove('active');l.classList.remove('visible');
+        map.off('moveend',onMetroMove);
+        document.getElementById('statMetro').textContent='—';
+    }else{
+        metroOn=true;b.classList.add('active');l.classList.add('visible');
+        fetchMetroStations();
+        map.on('moveend',onMetroMove);
+        showNotification('🚇','Μετρό & Τραμ','Overpass API — OpenStreetMap','info');
+    }
+}
+
+// ═══ BUS / TRANSIT (Overpass stops + öpnvkarte routes + Moovit/GMaps links) ═══
+let busOn=false,busMarkers=[],busTimer=null,busTransitLayer=null;
+function updateTransitLinks(){
+    const c=map.getCenter(),z=map.getZoom();
+    const moovit=document.getElementById('linkMoovit');
+    const gmaps=document.getElementById('linkGmaps');
+    if(moovit)moovit.href=`https://moovitapp.com/index/en/public_transit-region-lat_${c.lat}_lng_${c.lng}`;
+    if(gmaps)gmaps.href=`https://www.google.com/maps/@${c.lat.toFixed(5)},${c.lng.toFixed(5)},${z}z/data=!5m1!1e2`;
+}
+async function fetchBusStops(){
+    if(!busOn)return;
+    busMarkers.forEach(m=>map.removeLayer(m));busMarkers=[];
+    updateTransitLinks();
+    const z=map.getZoom();
+    if(z<13){document.getElementById('statBus').textContent='Zoom+';return}
+    const b=map.getBounds(),s=b.getSouth(),w=b.getWest(),n=b.getNorth(),e=b.getEast();
+    try{
+        const query=`[out:json][timeout:10];node["highway"="bus_stop"](${s},${w},${n},${e});out body 300;`;
+        const r=await fetch('https://overpass-api.de/api/interpreter',{method:'POST',body:'data='+encodeURIComponent(query)});
+        const d=await r.json();
+        let count=0;
+        (d.elements||[]).forEach(el=>{
+            if(!el.lat||!el.lon)return;
+            const name=el.tags?.name||'Στάση';
+            const routes=el.tags?.route_ref||'';
+            const bIc=L.divIcon({className:'',html:`<div class="bus-icon">B</div>`,iconSize:[20,20],iconAnchor:[10,10]});
+            const m=L.marker([el.lat,el.lon],{icon:bIc})
+                .bindPopup(`<div class="popup-content"><div class="popup-title">🚌 ${name}</div>${routes?`<div class="popup-row"><span class="popup-label">Γραμμές</span><span class="popup-value">${routes}</span></div>`:''}
+                <div class="popup-row"><a href="https://moovitapp.com/index/en/public_transit-region-lat_${el.lat}_lng_${el.lon}" target="_blank" style="color:#00b300;font-size:9px">Moovit →</a> <a href="https://www.google.com/maps/dir/?api=1&destination=${el.lat},${el.lon}&travelmode=transit" target="_blank" style="color:#4285f4;font-size:9px">Google Maps →</a></div></div>`);
+            m.addTo(map);busMarkers.push(m);count++;
+        });
+        document.getElementById('statBus').textContent=count;
+    }catch(e){document.getElementById('statBus').textContent='—'}
+}
+function onBusMove(){if(!busOn)return;clearTimeout(busTimer);busTimer=setTimeout(fetchBusStops,1500)}
+function toggleBus(){
+    const b=document.querySelector('[data-layer="bus"]'),l=document.getElementById('legend-bus');
+    if(busOn){
+        busOn=false;clearTimeout(busTimer);
+        busMarkers.forEach(m=>map.removeLayer(m));busMarkers=[];
+        if(busTransitLayer)map.removeLayer(busTransitLayer);busTransitLayer=null;
+        b.classList.remove('active');l.classList.remove('visible');
+        map.off('moveend',onBusMove);
+        document.getElementById('statBus').textContent='—';
+    }else{
+        busOn=true;b.classList.add('active');l.classList.add('visible');
+        // öpnvkarte transit route overlay (shows bus/tram/metro routes from OSM)
+        busTransitLayer=L.tileLayer('https://tile.memomaps.de/tilegen/{z}/{x}/{y}.png',{opacity:0.45,maxZoom:18,attribution:'© öpnvkarte'});
+        busTransitLayer.addTo(map);
+        fetchBusStops();
+        map.on('moveend',onBusMove);
+        updateTransitLinks();
+        showNotification('🚌','Λεωφορεία & Transit','Στάσεις + δρομολόγια · Moovit/GMaps links','info');
+    }
+}
+
+// ═══ HEALTH (Open-Meteo — free, no key) ═══
+let pollenOverlayOn=false,pollenMarkers=[];
+function togglePollenOverlay(){const b=document.querySelector('[data-layer="pollen-overlay"]'),l=document.getElementById('legend-pollen-overlay');if(pollenOverlayOn){clearMarkers(pollenMarkers);b.classList.remove('active');l.classList.remove('visible');pollenOverlayOn=false}else{b.classList.add('active');l.classList.add('visible');pollenOverlayOn=true}}
+function pollenRisk(birch,grass,olive,alder,ragweed,mugwort){
+    const risks=[];
+    if(grass!=null)risks.push(grass>100?3:grass>30?2:grass>10?1:0);
+    if(birch!=null)risks.push(birch>100?3:birch>30?2:birch>10?1:0);
+    if(olive!=null)risks.push(olive>200?3:olive>60?2:olive>15?1:0);
+    if(alder!=null)risks.push(alder>80?3:alder>30?2:alder>10?1:0);
+    if(ragweed!=null)risks.push(ragweed>50?3:ragweed>15?2:ragweed>5?1:0);
+    if(mugwort!=null)risks.push(mugwort>50?3:mugwort>15?2:mugwort>5?1:0);
+    const mx=Math.max(...risks,0);
+    return mx>=3?{t:'Πολύ Υψηλή',c:'#c62828'}:mx>=2?{t:'Υψηλή',c:'#ff9800'}:mx>=1?{t:'Μέτρια',c:'#fbc02d'}:{t:'Χαμηλή',c:'#4caf50'};
+}
+function calcSwim(seaT,waveH,wind,wId){
+    if(wId>=200&&wId<=232)return{t:'Καταιγίδα ⛈️',c:'#b71c1c'};
+    if(waveH!=null&&waveH>2.5)return{t:'Κύματα! ❌',c:'#c62828'};
+    if(wind>20)return{t:'Θύελλα! ❌',c:'#c62828'};
+    let s=0;
+    s+=(seaT!=null?(seaT>=24?3:seaT>=21?2:seaT>=17?1:0):1);
+    s+=(waveH!=null?(waveH<=0.5?3:waveH<=1?2:waveH<=1.8?1:0):2);
+    s+=(wind<=4?3:wind<=8?2:wind<=14?1:0);
+    return s>=7?{t:'Εξαιρετικό 🏊',c:'#1b5e20'}:s>=5?{t:'Καλό 🏊',c:'#4caf50'}:s>=3?{t:'Μέτριο ⚠️',c:'#ff9800'}:{t:'Ακατάλληλο ❌',c:'#c62828'};
+}
+function calcRun(temp,hum,wind,aqi,wId,rain){
+    if(wId>=200&&wId<=232)return{t:'Καταιγίδα ❌',c:'#b71c1c'};
+    if(rain>5)return{t:'Δυνατή βροχή ❌',c:'#c62828'};
+    if(temp>=40)return{t:'Καύσωνας ❌',c:'#b71c1c'};
+    let s=0;
+    s+=((temp>=10&&temp<=18)?3:(temp>=5&&temp<=25)?2:(temp>=0&&temp<=30)?1:0);
+    s+=(hum<=50?3:hum<=65?2:hum<=80?1:0);
+    if(temp>28&&hum>65)s=Math.max(s-1,0);
+    s+=(wind<=5?3:wind<=10?2:wind<=18?1:0);
+    s+=(aqi<=50?3:aqi<=100?2:aqi<=150?1:0);
+    return s>=10?{t:'Ιδανικό 🏃',c:'#1b5e20'}:s>=7?{t:'Καλό 🏃',c:'#4caf50'}:s>=4?{t:'Μέτριο ⚠️',c:'#ff9800'}:{t:'Αποφύγετε ❌',c:'#c62828'};
+}
+async function fetchHealthData(lat,lng,city,moz,uv,wx){
+    const hI=document.getElementById('health-info');
+    let pollen=null,aqi=null,marine=null;
+    try{
+        const[pR,aR,mR]=await Promise.allSettled([
+            fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lng}&current=alder_pollen,birch_pollen,grass_pollen,mugwort_pollen,olive_pollen,ragweed_pollen`),
+            fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lng}&current=european_aqi,us_aqi,pm10,pm2_5`),
+            fetch(`https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lng}&current=wave_height,wave_period,wave_direction&hourly=sea_surface_temperature&forecast_hours=1&timezone=auto`)
+        ]);
+        if(pR.status==='fulfilled'&&pR.value.ok){const d=await pR.value.json();if(d.current)pollen=d.current}
+        if(aR.status==='fulfilled'&&aR.value.ok){const d=await aR.value.json();if(d.current)aqi=d.current}
+        if(mR.status==='fulfilled'&&mR.value.ok){const d=await mR.value.json();if(d.current||d.hourly)marine={wave:d.current?.wave_height,period:d.current?.wave_period,seaTemp:d.hourly?.sea_surface_temperature?.[0]}}
+    }catch(e){}
+    const aqiVal=aqi?Math.max(aqi.european_aqi||0,aqi.us_aqi||0):0;
+    let h=`<div class="weather-location" style="color:var(--accent-health)">📍 ${city}</div><div class="health-grid">`;
+    // ── Swimming with colored person badge ──
+    if(marine&&(marine.wave!=null||marine.seaTemp!=null)){
+        const sw=calcSwim(marine.seaTemp,marine.wave,wx?.wind||0,wx?.wId||0);
+        const bft=wx?beaufort(wx.wind):0;
+        h+=`<div class="risk-card"><div class="risk-title">🏊 Κολύμπι</div><div style="display:flex;align-items:center;gap:6px;margin:3px 0"><span class="swim-badge" style="background:${sw.c}">🏊</span><span class="risk-val" style="font-size:11px;color:${sw.c};margin:0">${sw.t}</span></div>`;
+        const parts=[];
+        if(marine.seaTemp!=null)parts.push(`🌡️Θάλασσα ${marine.seaTemp.toFixed(1)}°C`);
+        if(marine.wave!=null)parts.push(`🌊${marine.wave.toFixed(1)}m`);
+        if(bft>0)parts.push(`💨${bft} Μπφ`);
+        if(parts.length)h+=`<div style="font-size:8px;color:var(--text-secondary)">${parts.join(' · ')}</div>`;
+        h+=`</div>`;
+    }else{
+        h+=`<div class="risk-card"><div class="risk-title">🏊 Κολύμπι</div><div style="display:flex;align-items:center;gap:6px;margin:3px 0"><span class="swim-badge" style="background:#9e9e9e">🏊</span><span style="font-size:9px;color:var(--text-secondary)">Μόνο ακτές 🏝️</span></div></div>`;
+    }
+    // ── Running ──
+    const rn=calcRun(wx?.temp||20,wx?.hum||50,wx?.wind||0,aqiVal,wx?.wId||800,wx?.rain||0);
+    h+=`<div class="risk-card"><div class="risk-title">🏃 Τρέξιμο</div><div class="risk-val" style="font-size:11px;color:${rn.c}">${rn.t}</div>`;
+    if(wx)h+=`<div style="font-size:8px;color:var(--text-secondary)">${wx.temp.toFixed(0)}° · ${wx.hum}% · ${wx.wind.toFixed(0)}m/s</div>`;
+    h+=`</div>`;
+    // ── Pollen ──
+    if(pollen){
+        const birch=pollen.birch_pollen,grass=pollen.grass_pollen,olive=pollen.olive_pollen,alder=pollen.alder_pollen,ragweed=pollen.ragweed_pollen,mugwort=pollen.mugwort_pollen;
+        const risk=pollenRisk(birch,grass,olive,alder,ragweed,mugwort);
+        const v=n=>n!=null?Math.round(n):'-';
+        h+=`<div class="risk-card" style="grid-column:span 2"><div class="risk-title">🌿 Γύρη</div><div class="risk-val" style="color:${risk.c}">${risk.t}</div><div style="font-size:9px;color:var(--text-secondary);margin-top:3px;display:flex;justify-content:space-around;flex-wrap:wrap;gap:2px"><span>🌳${v(birch)}</span><span>🌿${v(grass)}</span><span>🫒${v(olive)}</span><span>🌾${v(ragweed)}</span><span>🪻${v(mugwort)}</span></div></div>`;
+        if(pollenOverlayOn){const pm=L.circleMarker([lat,lng],{radius:14,fillColor:risk.c,color:risk.c,weight:2,opacity:0.8,fillOpacity:0.35});pm.addTo(map);pollenMarkers.push(pm)}
+    }else h+=`<div class="risk-card" style="grid-column:span 2"><div class="risk-title">🌿 Γύρη</div><div class="risk-val" style="font-size:10px;color:var(--text-secondary)">N/A</div></div>`;
+    // ── AQI ──
+    if(aqi){
+        const eu=aqi.european_aqi||0,us=aqi.us_aqi||0,pm25=aqi.pm2_5,pm10=aqi.pm10;
+        const v=Math.max(eu,us);
+        const aC=v<=50?'#4caf50':v<=100?'#fbc02d':v<=150?'#ff9800':'#c62828';
+        h+=`<div class="risk-card"><div class="risk-title">😷 AQI</div><div class="risk-val" style="color:${aC}">${v}</div><div style="font-size:8px;color:var(--text-secondary)">PM2.5:${pm25?Math.round(pm25):'-'} PM10:${pm10?Math.round(pm10):'-'}</div></div>`;
+    }else h+=`<div class="risk-card"><div class="risk-title">😷 AQI</div><div class="risk-val" style="font-size:10px;color:var(--text-secondary)">N/A</div></div>`;
+    // ── UV + Mosquitoes ──
+    h+=`<div class="risk-card"><div class="risk-title">☀️ UV</div><div class="risk-val" style="color:${uv>7?'#c62828':uv>5?'#ff9800':'#4caf50'}">${uv}</div></div>`;
+    h+=`<div class="risk-card"><div class="risk-title">🦟 Κουνούπια</div><div class="risk-val" style="font-size:10px;color:${moz.c}">${moz.t}</div></div>`;
+    h+='</div>';hI.innerHTML=h;
+}
+
+// ═══ THUNDER / LIGHTNING (Weather-Based) ═══
+let thunderOn=false,thunderInt=null,thunderRefresh=null,lightningMarkers=[],stormAreas=[],stormCircles=[];
+function playThunderSound(){
+    if(!soundEnabled)return;
+    try{
+        const ctx=getAudioCtx(),now=ctx.currentTime;
+        const len=ctx.sampleRate*3,buf=ctx.createBuffer(1,len,ctx.sampleRate),ch=buf.getChannelData(0);
+        for(let i=0;i<len;i++)ch[i]=(Math.random()*2-1)*Math.exp(-i/(ctx.sampleRate*0.7));
+        const src=ctx.createBufferSource();src.buffer=buf;
+        const lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.setValueAtTime(120,now);lp.frequency.exponentialRampToValueAtTime(35,now+2.5);
+        const gain=ctx.createGain();gain.gain.setValueAtTime(0.01,now);gain.gain.linearRampToValueAtTime(0.35,now+0.08);gain.gain.exponentialRampToValueAtTime(0.01,now+3);
+        src.connect(lp);lp.connect(gain);gain.connect(ctx.destination);src.start(now);src.stop(now+3);
+        const osc=ctx.createOscillator(),g2=ctx.createGain();
+        osc.type='sawtooth';osc.frequency.setValueAtTime(2000,now);osc.frequency.exponentialRampToValueAtTime(80,now+0.15);
+        g2.gain.setValueAtTime(0.25,now);g2.gain.exponentialRampToValueAtTime(0.001,now+0.2);
+        osc.connect(g2);g2.connect(ctx.destination);osc.start(now);osc.stop(now+0.2);
+    }catch(e){}
+}
+function createLightningFlash(){
+    const f=document.getElementById('lightningFlash');
+    f.classList.remove('flash');void f.offsetWidth;f.classList.add('flash');
+    setTimeout(()=>f.classList.remove('flash'),600);
+}
+async function fetchStormAreas(){
+    try{
+        const c=map.getCenter();
+        const r=await fetch(`https://api.openweathermap.org/data/2.5/find?lat=${c.lat}&lon=${c.lng}&cnt=50&appid=${API_KEY}&units=metric`);
+        const d=await r.json();
+        // Weather codes 200-232 = thunderstorm group
+        const storms=(d.list||[]).filter(c=>c.weather&&c.weather[0]&&c.weather[0].id>=200&&c.weather[0].id<=232);
+        stormAreas=storms.map(s=>({lat:s.coord.lat,lng:s.coord.lon,name:s.name,desc:s.weather[0].description,id:s.weather[0].id}));
+        // Draw storm zones on map
+        stormCircles.forEach(c=>map.removeLayer(c));stormCircles=[];
+        stormAreas.forEach(s=>{
+            const c=L.circle([s.lat,s.lng],{radius:30000,fillColor:'#7c4dff',color:'#311b92',weight:1.5,opacity:0.6,fillOpacity:0.12,dashArray:'6,4'}).bindPopup(`<div class="popup-content"><div class="popup-title">⛈️ ${s.name}</div><div class="popup-row"><span class="popup-label">Κατάσταση</span><span class="popup-value">${s.desc}</span></div></div>`);
+            c.addTo(map);stormCircles.push(c);
+        });
+        return stormAreas;
+    }catch(e){return []}
+}
+function strikeAtStorm(){
+    if(!thunderOn||stormAreas.length===0)return;
+    const storm=stormAreas[Math.floor(Math.random()*stormAreas.length)];
+    const lat=storm.lat+(Math.random()-0.5)*0.5;
+    const lng=storm.lng+(Math.random()-0.5)*0.5;
+    const ic=L.divIcon({className:'lightning-bolt',html:'⚡',iconSize:[30,30],iconAnchor:[15,15]});
+    const m=L.marker([lat,lng],{icon:ic}).addTo(map);
+    lightningMarkers.push(m);
+    setTimeout(()=>{map.removeLayer(m);lightningMarkers=lightningMarkers.filter(x=>x!==m)},1400);
+    if(map.getBounds().contains([lat,lng])){
+        createLightningFlash();
+        setTimeout(()=>playThunderSound(),300+Math.random()*2000);
+    }
+}
+function scheduleNextStrike(){
+    if(!thunderOn)return;
+    const delay=stormAreas.length>3?2000+Math.random()*3000:4000+Math.random()*7000;
+    thunderInt=setTimeout(()=>{strikeAtStorm();scheduleNextStrike()},delay);
+}
+let thunderMoveTimer=null;
+function onThunderMove(){
+    if(!thunderOn)return;
+    clearTimeout(thunderMoveTimer);
+    thunderMoveTimer=setTimeout(async()=>{
+        const storms=await fetchStormAreas();
+        updateThunderLegend(storms);
+        if(storms.length>0&&!thunderInt){scheduleNextStrike()}
+    },1500);
+}
+function updateThunderLegend(storms){
+    const note=document.querySelector('#legend-thunder .legend-note');
+    if(!note)return;
+    if(storms.length===0)note.textContent='Δεν βρέθηκαν καταιγίδες στην περιοχή. Μετακινήσου στον χάρτη.';
+    else note.textContent=`⛈️ ${storms.length} καταιγίδες: ${storms.map(s=>s.name).slice(0,5).join(', ')}`;
+}
+async function toggleThunder(){
+    const b=document.querySelector('[data-layer="thunder"]'),l=document.getElementById('legend-thunder');
+    if(thunderOn){
+        thunderOn=false;clearTimeout(thunderInt);thunderInt=null;clearInterval(thunderRefresh);
+        lightningMarkers.forEach(m=>map.removeLayer(m));lightningMarkers=[];
+        stormCircles.forEach(c=>map.removeLayer(c));stormCircles=[];stormAreas=[];
+        b.classList.remove('active');l.classList.remove('visible');
+        map.off('moveend',onThunderMove);
+    }else{
+        thunderOn=true;b.classList.add('active');l.classList.add('visible');
+        showNotification('⚡','Αναζήτηση καταιγίδων...','OpenWeatherMap scan','info');
+        const storms=await fetchStormAreas();
+        if(storms.length===0){
+            showNotification('⚡','Δεν βρέθηκαν καταιγίδες','Μετακινήσου σε περιοχή με κακοκαιρία','info');
+        }else{
+            showNotification('⚡',`${storms.length} καταιγίδες!`,storms.map(s=>s.name).slice(0,4).join(', '),'warning');
+            setTimeout(strikeAtStorm,600);
+            scheduleNextStrike();
+        }
+        updateThunderLegend(storms);
+        thunderRefresh=setInterval(async()=>{if(thunderOn){const s=await fetchStormAreas();updateThunderLegend(s)}},300000);
+        map.on('moveend',onThunderMove);
+    }
+}
+
+// ═══ DISTANCE MEASUREMENT TOOL ═══
+let distMode=false,distPoints=[],distLine=null,distLabelMark=null,distMarkers=[];
+function toggleDistTool(){
+    const btn=document.getElementById('distToolBtn');
+    if(distMode){
+        distMode=false;btn.classList.remove('active');
+        clearDistMeasure();
+        map.getContainer().style.cursor='';
+        showNotification('📏','Μέτρηση OFF','','info');
+    }else{
+        distMode=true;btn.classList.add('active');
+        clearDistMeasure();
+        map.getContainer().style.cursor='crosshair';
+        showNotification('📏','Μέτρηση απόστασης','Κάνε κλικ σε 2 σημεία','info');
+    }
+}
+function clearDistMeasure(){
+    if(distLine){map.removeLayer(distLine);distLine=null}
+    if(distLabelMark){map.removeLayer(distLabelMark);distLabelMark=null}
+    distMarkers.forEach(m=>map.removeLayer(m));distMarkers=[];
+    distPoints=[];
+}
+function formatDist(m){
+    if(m>=1000)return (m/1000).toFixed(2)+' km';
+    return Math.round(m)+' m';
+}
+map.on('click',function(e){
+    if(!distMode)return;
+    if(distPoints.length>=2)clearDistMeasure();
+    distPoints.push(e.latlng);
+    const dm=L.circleMarker(e.latlng,{radius:6,fillColor:'#e53935',color:'#fff',weight:2,fillOpacity:1});
+    dm.addTo(map);distMarkers.push(dm);
+    if(distPoints.length===2){
+        const d=distPoints[0].distanceTo(distPoints[1]);
+        distLine=L.polyline(distPoints,{color:'#e53935',weight:3,dashArray:'8,6'}).addTo(map);
+        const mid=L.latLng((distPoints[0].lat+distPoints[1].lat)/2,(distPoints[0].lng+distPoints[1].lng)/2);
+        distLabelMark=L.marker(mid,{icon:L.divIcon({className:'dist-label',html:formatDist(d),iconSize:[null,null],iconAnchor:[40,12]})}).addTo(map);
+    }
+});
+
+// ═══ DUST / SAHARAN DUST (Open-Meteo) ═══
+let dustOn=false,dustMarkers=[],dustTimer=null;
+async function fetchDust(){
+    if(!dustOn)return;
+    dustMarkers.forEach(m=>map.removeLayer(m));dustMarkers=[];
+    const z=map.getZoom();
+    if(z<5){return}
+    const b=map.getBounds();
+    const step=z>=10?0.3:z>=7?0.8:2;
+    const points=[];
+    for(let lat=b.getSouth();lat<=b.getNorth();lat+=step){
+        for(let lng=b.getWest();lng<=b.getEast();lng+=step){
+            points.push({lat:Math.round(lat*100)/100,lng:Math.round(lng*100)/100});
+        }
+    }
+    // Limit grid points
+    const grid=points.slice(0,30);
+    const lats=grid.map(p=>p.lat).join(',');
+    const lngs=grid.map(p=>p.lng).join(',');
+    try{
+        const r=await fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lats}&longitude=${lngs}&current=dust`);
+        const d=await r.json();
+        const results=Array.isArray(d)?d:[d];
+        results.forEach((item,i)=>{
+            if(!item.current||item.current.dust==null)return;
+            const dust=item.current.dust;
+            if(dust<5)return;
+            const c=dust>200?'#b71c1c':dust>100?'#e53935':dust>50?'#ff9800':dust>25?'#fbc02d':'#a5d6a7';
+            const op=Math.min(0.5,dust/200+0.1);
+            const m=L.circleMarker([grid[i].lat,grid[i].lng],{radius:z>=10?12:z>=7?18:28,fillColor:c,color:c,weight:0,fillOpacity:op})
+                .bindPopup(`<div class="popup-content"><div class="popup-title">🌫️ Σκόνη</div><div class="popup-row"><span class="popup-label">Dust</span><span class="popup-value">${dust.toFixed(1)} μg/m³</span></div></div>`);
+            m.addTo(map);dustMarkers.push(m);
+        });
+    }catch(e){}
+}
+function onDustMove(){if(!dustOn)return;clearTimeout(dustTimer);dustTimer=setTimeout(fetchDust,2000)}
+function toggleDust(){
+    const btn=document.querySelector('[data-layer="dust"]'),l=document.getElementById('legend-dust');
+    if(dustOn){
+        dustOn=false;clearTimeout(dustTimer);
+        dustMarkers.forEach(m=>map.removeLayer(m));dustMarkers=[];
+        btn.classList.remove('active');l.classList.remove('visible');
+        map.off('moveend',onDustMove);
+    }else{
+        dustOn=true;btn.classList.add('active');l.classList.add('visible');
+        fetchDust();
+        map.on('moveend',onDustMove);
+        showNotification('🌫️','Σκόνη','Open-Meteo Dust Layer','info');
+    }
+}
+
+// ═══ STATS ═══
+async function refreshStats(){
+    const days=currentTimeRangeDays;
+    try{let u;if(days<=1)u='https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson';else if(days<=7)u='https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson';else if(days<=30)u='https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_month.geojson';else u=`https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime=${getDateStr(days)}&minmagnitude=4&limit=500`;const r=await fetch(u);const d=await r.json();document.getElementById('statQuakes').textContent=(d.features||[]).length}catch(e){}
+    try{const r=await fetch(`https://eonet.gsfc.nasa.gov/api/v3/events?category=wildfires&status=open&days=${Math.min(days,365)}`);const d=await r.json();const e=(d.events||[]).length;try{const r2=await fetch(`https://www.gdacs.org/gdacsapi/api/events/geteventlist/SEARCH?eventlist=WF&fromdate=${getDateStr(days)}&todate=${getDateStr(0)}&alertlevel=red;orange;green`);const d2=await r2.json();document.getElementById('statFires').textContent=e+(d2.features||[]).length}catch(e2){document.getElementById('statFires').textContent=e}}catch(e){}
+    try{const r=await fetch(`https://www.gdacs.org/gdacsapi/api/events/geteventlist/SEARCH?eventlist=TC&fromdate=${getDateStr(days)}&todate=${getDateStr(0)}&alertlevel=red;orange;green`);const d=await r.json();document.getElementById('statHurricanes').textContent=(d.features||[]).length}catch(e){document.getElementById('statHurricanes').textContent='0'}
+    try{const r=await fetch(`https://eonet.gsfc.nasa.gov/api/v3/events?category=floods&status=open&days=${Math.min(days,365)}`);const d=await r.json();const e=(d.events||[]).length;try{const r2=await fetch(`https://www.gdacs.org/gdacsapi/api/events/geteventlist/SEARCH?eventlist=FL&fromdate=${getDateStr(days)}&todate=${getDateStr(0)}&alertlevel=red;orange;green`);const d2=await r2.json();document.getElementById('statFloods').textContent=e+(d2.features||[]).length}catch(e2){document.getElementById('statFloods').textContent=e}}catch(e){}
+}
+refreshStats();
+</script>
+</body>
+</html>
