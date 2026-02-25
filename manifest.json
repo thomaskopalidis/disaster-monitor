@@ -2,7 +2,7 @@
   "name": "Ultimate Disaster Monitor",
   "short_name": "Disaster Monitor",
   "description": "Real-time disaster monitoring, weather, traffic & health data",
-  "start_url": "./wheater_natula_disaster.html",
+  "start_url": "./",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#0a0e17",
